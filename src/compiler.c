@@ -5,6 +5,7 @@
 #include "object.h"
 #include "memory.h"
 #include "vm.h"
+#include "leb128.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -78,6 +79,7 @@ typedef struct {
 } ParseRule;
 
 static void error(Parser* parser, const char* message);
+static uint8_t argumentList(Compiler* compiler);
 static void expression(Compiler* compiler);
 static void varDeclaration(Compiler* compiler);
 static void statement(Compiler* compiler);
@@ -265,19 +267,22 @@ static void endScope(Compiler* compiler) {
 }
 
 static uint32_t makeConstant(Compiler* compiler, Value value) {
-	//TODO OP_CONSTANT_X24
-	size_t constant = addConstant(compiler->vm, currentChunk(compiler), value);
-	if (constant > UINT8_MAX) {
+	uint32_t constant = (uint32_t)addConstant(compiler->vm, currentChunk(compiler), value);
+	if (constant > UINT32_MAX) {
 		error(compiler->parser, "Too many constants in one chunk.");
 		return 0;
 	}
 
-	return (uint8_t)constant;
+	return constant;
+}
+
+static void encodeConstant(Compiler* compiler, uint32_t constant) {
+	writeUleb128(compiler->vm, currentChunk(compiler), constant, compiler->parser->previous.line);
 }
 
 static void emitConstant(Compiler* compiler, Value value) {
-	// TODO: Support OP_CONSTANT_X24
-	emitPair(compiler, OP_CONSTANT, makeConstant(compiler, value));
+	emitByte(compiler, OP_CONSTANT);
+	encodeConstant(compiler, makeConstant(compiler, value));
 }
 
 static uint32_t identifierConstant(Compiler* compiler, Token* name) {
@@ -380,8 +385,8 @@ static void defineVariable(Compiler* compiler, uint32_t global) {
 		markInitialized(compiler);
 		return;
 	}
-	//TODO Support 24-bit constants
-	emitPair(compiler, OP_DEFINE_GLOBAL, global);
+	emitByte(compiler, OP_DEFINE_GLOBAL);
+	encodeConstant(compiler, global);
 }
 
 static void function(Compiler* compiler, FunctionType type) {
@@ -406,8 +411,8 @@ static void function(Compiler* compiler, FunctionType type) {
 
 	functionCompiler.vm = compiler->vm;
 	ObjFunction* function = endCompiler(&functionCompiler);
-	//TODO CLOSURE_X24
-	emitPair(compiler, OP_CLOSURE, makeConstant(compiler, OBJ_VAL(function)));
+	emitByte(compiler, OP_CLOSURE);
+	encodeConstant(compiler, makeConstant(compiler, OBJ_VAL(function)));
 
 	for (size_t i = 0; i < function->upvalueCount; i++) {
 		emitByte(compiler, functionCompiler.upvalues[i].isLocal ? 1 : 0);
@@ -425,7 +430,8 @@ static void method(Compiler* compiler) {
 		type = TYPE_CONSTRUCTOR;
 	}
 	function(compiler, type);
-	emitPair(compiler, OP_METHOD, constant);
+	emitByte(compiler, OP_METHOD);
+	encodeConstant(compiler, constant);
 }
 
 static void number(Compiler* compiler, bool canAssign) {
@@ -466,13 +472,22 @@ static void namedVariable(Compiler* compiler, Token name, bool canAssign) {
 		getOp = OP_GET_GLOBAL;
 		setOp = OP_SET_GLOBAL;
 	}
-	//TODO: support OP_SET_GLOBAL_X24 and family
 	if (canAssign && match(compiler, TOKEN_EQUAL)) {
 		expression(compiler);
-		emitPair(compiler, setOp, (uint8_t)arg);
+		if(setOp != OP_SET_GLOBAL)
+			emitPair(compiler, setOp, (uint8_t)arg);
+		else {
+			emitByte(compiler, setOp);
+			encodeConstant(compiler, arg);
+		}
 	}
 	else {
-		emitPair(compiler, getOp, (uint8_t)arg);
+		if (setOp != OP_SET_GLOBAL)
+			emitPair(compiler, getOp, (uint8_t)arg);
+		else {
+			emitByte(compiler, getOp);
+			encodeConstant(compiler, arg);
+		}
 	}
 }
 
@@ -503,12 +518,14 @@ static void super_(Compiler* compiler, bool canAssign) {
 	if (match(compiler, TOKEN_LEFT_PAREN)) {
 		uint8_t argCount = argumentList(compiler);
 		namedVariable(compiler, syntheticToken("super"), false);
-		emitPair(compiler, OP_SUPER_INVOKE, name);
+		emitByte(compiler, OP_SUPER_INVOKE);
+		encodeConstant(compiler, name);
 		emitByte(compiler, argCount);
 	}
 	else {
 		namedVariable(compiler, syntheticToken("super"), false);
-		emitPair(compiler, OP_GET_SUPER, name);
+		emitByte(compiler, OP_GET_SUPER);
+		encodeConstant(compiler, name);
 	}
 }
 
@@ -538,15 +555,18 @@ static void dot(Compiler* compiler, bool canAssign) {
 
 	if (canAssign && match(compiler, TOKEN_EQUAL)) {
 		expression(compiler);
-		emitPair(compiler, OP_SET_PROPERTY, name);
+		emitByte(compiler, OP_SET_PROPERTY);
+		encodeConstant(compiler, name);
 	}
 	else if (match(compiler, TOKEN_LEFT_PAREN)) {
 		uint8_t argCount = argumentList(compiler);
-		emitPair(compiler, OP_INVOKE, name);
+		emitByte(compiler, OP_INVOKE);
+		encodeConstant(compiler, name);
 		emitByte(compiler, argCount);
 	}
 	else {
-		emitPair(compiler, OP_GET_PROPERTY, name);
+		emitByte(compiler, OP_GET_PROPERTY);
+		encodeConstant(compiler, name);
 	}
 }
 
@@ -631,12 +651,6 @@ static void parsePrecedence(Compiler* compiler, Precedence precedence) {
 
 static void expression(Compiler* compiler) {
 	parsePrecedence(compiler, PREC_ASSIGNMENT);
-}
-
-static void printStatement(Compiler* compiler) {
-	expression(compiler);
-	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after value.");
-	emitByte(compiler, OP_PRINT);
 }
 
 static void expressionStatement(Compiler* compiler) {
@@ -741,10 +755,7 @@ static void block(Compiler* compiler) {
 }
 
 static void statement(Compiler* compiler) {
-	if (match(compiler, TOKEN_PRINT)) {
-		printStatement(compiler);
-	}
-	else if (match(compiler, TOKEN_IF)) {
+	if (match(compiler, TOKEN_IF)) {
 		ifStatement(compiler);
 	}
 	else if (match(compiler, TOKEN_RETURN)) {
@@ -815,7 +826,8 @@ static void classDeclaration(Compiler* compiler) {
 	uint32_t nameConstant = identifierConstant(compiler, &compiler->parser->previous);
 	declareVariable(compiler);
 
-	emitPair(compiler, OP_CLASS, nameConstant);
+	emitByte(compiler, OP_CLASS);
+	encodeConstant(compiler, nameConstant);
 	defineVariable(compiler, nameConstant);
 
 	ClassCompiler classCompiler;

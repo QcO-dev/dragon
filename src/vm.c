@@ -4,6 +4,7 @@
 #include "compiler.h"
 #include "object.h"
 #include "memory.h"
+#include "leb128.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -13,6 +14,15 @@ static void defineNative(VM* vm, const char* name, NativeFn function);
 
 static Value clockNative(uint8_t argCount, Value* args) {
 	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
+
+static Value printNative(uint8_t argCount, Value* args) {
+	for (size_t i = 0; i < argCount; i++) {
+		printValue(args[i]);
+		printf(" ");
+	}
+	printf("\n");
+	return NULL_VAL;
 }
 
 static void resetStack(VM* vm) {
@@ -37,6 +47,7 @@ void initVM(VM* vm) {
 	vm->constructorString = copyString(vm, "constructor", 11);
 
 	defineNative(vm, "clock", clockNative);
+	defineNative(vm, "print", printNative);
 }
 
 void freeVM(VM* vm) {
@@ -248,12 +259,17 @@ static void concatenate(VM* vm) {
 	push(vm, OBJ_VAL(result));
 }
 
+static inline Value getConstant(CallFrame* frame) {
+	size_t index;
+	frame->ip += readUleb128(frame->ip, &index);
+	return frame->closure->function->chunk.constants.values[index];
+}
+
 static InterpreterResult run(VM* vm) {
 	CallFrame* frame = &vm->frames[vm->frameCount - 1];
 #define READ_BYTE() (*frame->ip++)
 #define READ_SHORT() (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
-#define READ_CONSTANT() (frame->closure->function->chunk.constants.values[READ_BYTE()])
-#define READ_CONSTANT_X24() (frame->ip += 3, frame->closure->function->chunk.constants.values[(frame->ip[-3] << 16) | (frame->ip[-2] << 8) | frame->ip[-1]])
+#define READ_CONSTANT() (getConstant(frame))
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op) \
 	do { \
@@ -288,11 +304,6 @@ static InterpreterResult run(VM* vm) {
 				break;
 			}
 
-			case OP_CONSTANT_X24: {
-				Value constant = READ_CONSTANT_X24();
-				push(vm, constant);
-				break;
-			}
 			case OP_NULL: push(vm, NULL_VAL); break;
 			case OP_TRUE: push(vm, BOOL_VAL(true)); break;
 			case OP_FALSE: push(vm, BOOL_VAL(false)); break;
@@ -527,12 +538,6 @@ static InterpreterResult run(VM* vm) {
 					return INTERPRETER_RUNTIME_ERR;
 				}
 				frame = &vm->frames[vm->frameCount - 1];
-				break;
-			}
-
-			case OP_PRINT: {
-				printValue(pop(vm));
-				printf("\n");
 				break;
 			}
 

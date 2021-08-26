@@ -1,6 +1,7 @@
 #include "debug.h"
 #include "value.h"
 #include "object.h"
+#include "leb128.h"
 #include <stdio.h>
 #include <inttypes.h>
 
@@ -28,16 +29,14 @@ static int simpleInstruction(const char* name, int offset) {
 	return offset + 1;
 }
 
-static int constantInstruction(const char* name, Chunk* chunk, int offset, int size) {
-	size_t constant = 0;
-	for (int i = 0; i < size; i++) {
-		constant |= ((size_t)chunk->code[offset + i + 1]) << ((size - i - 1) * 8);
-	}
+static int constantInstruction(const char* name, Chunk* chunk, int offset) {
+	size_t constant;
+	size_t size = readUleb128(&chunk->code[offset + 1], &constant);
 
 	printf("%-16s %4zu '", name, constant);
 	printValue(chunk->constants.values[constant]);
 	printf("'\n");
-	return offset + size + 1;
+	return offset + (int)size + 1;
 }
 
 static int byteInstruction(const char* name, Chunk* chunk, int offset) {
@@ -54,12 +53,13 @@ static int jumpInstruction(const char* name, int sign, Chunk* chunk, int offset)
 }
 
 static int invokeInstruction(const char* name, Chunk* chunk, int offset) {
-	uint8_t constant = chunk->code[offset + 1];
+	size_t constant;
+	size_t size = readUleb128(&chunk->code[offset + 1], &constant);
 	uint8_t argCount = chunk->code[offset + 2];
-	printf("%-16s (%d args) %4d '", name, argCount, constant);
+	printf("%-16s (%d args) %4zu '", name, argCount, constant);
 	printValue(chunk->constants.values[constant]);
 	printf("'\n");
-	return offset + 3;
+	return offset + size + 2;
 }
 
 int disassembleInstruction(Chunk* chunk, int offset) {
@@ -70,11 +70,10 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	uint8_t instruction = chunk->code[offset];
 
 	switch (instruction) {
-		case OP_CONSTANT: return constantInstruction("CONSTANT", chunk, offset, 1);
-		case OP_CONSTANT_X24: return constantInstruction("CONSTANT_X24", chunk, offset, 3);
-		case OP_GET_GLOBAL: return constantInstruction("GET_GLOBAL", chunk, offset, 1);
-		case OP_DEFINE_GLOBAL: return constantInstruction("DEFINE_GLOBAL", chunk, offset, 1);
-		case OP_SET_GLOBAL: return constantInstruction("SET_GLOBAL", chunk, offset, 1);
+		case OP_CONSTANT: return constantInstruction("CONSTANT", chunk, offset);
+		case OP_GET_GLOBAL: return constantInstruction("GET_GLOBAL", chunk, offset);
+		case OP_DEFINE_GLOBAL: return constantInstruction("DEFINE_GLOBAL", chunk, offset);
+		case OP_SET_GLOBAL: return constantInstruction("SET_GLOBAL", chunk, offset);
 		case OP_GET_LOCAL: return byteInstruction("GET_LOCAL", chunk, offset);
 		case OP_SET_LOCAL: return byteInstruction("SET_LOCAL", chunk, offset);
 		case OP_NULL: return simpleInstruction("NULL", offset);
@@ -114,15 +113,14 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		case OP_GET_UPVALUE: return byteInstruction("GET_UPVALUE", chunk, offset);
 		case OP_SET_UPVALUE: return byteInstruction("SET_UPVALUE", chunk, offset);
 		case OP_CLOSE_UPVALUE: return simpleInstruction("CLOSE_UPVALUE", offset);
-		case OP_CLASS: return constantInstruction("CLASS", chunk, offset, 1);
+		case OP_CLASS: return constantInstruction("CLASS", chunk, offset);
 		case OP_INHERIT: return simpleInstruction("INHERIT", offset);
-		case OP_METHOD: return constantInstruction("METHOD", chunk, offset, 1);
+		case OP_METHOD: return constantInstruction("METHOD", chunk, offset);
 		case OP_INVOKE: return invokeInstruction("INVOKE", chunk, offset);
 		case OP_SUPER_INVOKE: return invokeInstruction("SUPER_INVOKE", chunk, offset);
-		case OP_GET_PROPERTY: return constantInstruction("GET_PROPERTY", chunk, offset, 1);
-		case OP_SET_PROPERTY: return constantInstruction("SET_PROPERTY", chunk, offset, 1);
-		case OP_GET_SUPER: return constantInstruction("GET_SUPER", chunk, offset, 1);
-		case OP_PRINT: return simpleInstruction("PRINT", offset);
+		case OP_GET_PROPERTY: return constantInstruction("GET_PROPERTY", chunk, offset);
+		case OP_SET_PROPERTY: return constantInstruction("SET_PROPERTY", chunk, offset);
+		case OP_GET_SUPER: return constantInstruction("GET_SUPER", chunk, offset);
 		case OP_RETURN: return simpleInstruction("RETURN", offset);
 		default: {
 			printf("Unknown Opcode %d\n", instruction);

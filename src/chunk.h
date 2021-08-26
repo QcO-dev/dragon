@@ -4,7 +4,6 @@
 
 typedef enum {
 	OP_CONSTANT,
-	OP_CONSTANT_X24,
 	OP_NULL,
 	OP_TRUE,
 	OP_FALSE,
@@ -40,7 +39,6 @@ typedef enum {
 	OP_METHOD,
 	OP_INVOKE,
 	OP_SUPER_INVOKE,
-	OP_PRINT,
 	OP_RETURN
 } Opcode;
 
@@ -62,4 +60,3 @@ void initChunk(Chunk* chunk);
 void freeChunk(VM* vm, Chunk* chunk);
 void writeChunk(VM* vm, Chunk* chunk, uint8_t byte, size_t line);
 size_t addConstant(VM* vm, Chunk* chunk, Value value);
-void writeConstant(VM* vm, Chunk* chunk, Value value, size_t line);

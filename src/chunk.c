@@ -65,18 +65,3 @@ size_t addConstant(VM* vm, Chunk* chunk, Value value) {
 	writeValueArray(vm, &chunk->constants, value);
 	return chunk->constants.count - 1;
 }
-
-void writeConstant(VM* vm, Chunk* chunk, Value value, size_t line) {
-	size_t constant = addConstant(vm, chunk, value);
-
-	if (constant > UINT8_MAX) {
-		writeChunk(vm, chunk, OP_CONSTANT_X24, line);
-		writeChunk(vm, chunk, (uint8_t)(constant >> 16), line);
-		writeChunk(vm, chunk, (uint8_t)(constant >> 8), line);
-		writeChunk(vm, chunk, (uint8_t)constant, line);
-	}
-	else {
-		writeChunk(vm, chunk, OP_CONSTANT, line);
-		writeChunk(vm, chunk, (uint8_t)constant, line);
-	}
-}
