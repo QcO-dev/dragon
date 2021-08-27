@@ -179,10 +179,34 @@ Token scanToken(Scanner* scanner) {
 		case '+': return makeToken(scanner, TOKEN_PLUS);
 		case '/': return makeToken(scanner, TOKEN_SLASH);
 		case '*': return makeToken(scanner, TOKEN_STAR);
+		case '^': return makeToken(scanner, TOKEN_XOR);
+		case '~': return makeToken(scanner, TOKEN_BIT_NOT);
 		case '!': return makeToken(scanner, match(scanner, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
 		case '=': return makeToken(scanner, match(scanner, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
-		case '<': return makeToken(scanner, match(scanner, '=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
-		case '>': return makeToken(scanner, match(scanner, '=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
+		case '<': {
+			TokenType type = TOKEN_LESS;
+			if (match(scanner, '=')) {
+				type = TOKEN_LESS_EQUAL;
+			}
+			else if (match(scanner, '<')) {
+				type = TOKEN_LEFT_SHIFT;
+			}
+			return makeToken(scanner, type);
+		}
+		case '>': {
+			TokenType type = TOKEN_GREATER;
+			if (match(scanner, '=')) {
+				type = TOKEN_GREATER_EQUAL;
+			}
+			else if (match(scanner, '>')) {
+				type = TOKEN_RIGHT_SHIFT;
+
+				if (match(scanner, '>')) {
+					type = TOKEN_RIGHT_SHIFT_U;
+				}
+			}
+			return makeToken(scanner, type);
+		}
 		case '&': return makeToken(scanner, match(scanner, '&') ? TOKEN_AND : TOKEN_BIT_AND);
 		case '|': return makeToken(scanner, match(scanner, '|') ? TOKEN_OR : TOKEN_BIT_OR);
 	}

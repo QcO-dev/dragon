@@ -86,6 +86,13 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		case OP_SUB: return simpleInstruction("SUB", offset);
 		case OP_MUL: return simpleInstruction("MUL", offset);
 		case OP_DIV: return simpleInstruction("DIV", offset);
+		case OP_BIT_NOT: return simpleInstruction("BIT_NOT", offset);
+		case OP_AND: return simpleInstruction("AND", offset);
+		case OP_OR: return simpleInstruction("OR", offset);
+		case OP_XOR: return simpleInstruction("XOR", offset);
+		case OP_LSH: return simpleInstruction("LSH", offset);
+		case OP_ASH: return simpleInstruction("ASH", offset);
+		case OP_RSH: return simpleInstruction("RSH", offset);
 		case OP_EQUAL: return simpleInstruction("EQUAL", offset);
 		case OP_GREATER: return simpleInstruction("GREATER", offset);
 		case OP_LESS: return simpleInstruction("LESS", offset);

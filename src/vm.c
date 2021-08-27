@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 static void defineNative(VM* vm, const char* name, NativeFn function);
 
@@ -265,6 +266,10 @@ static inline Value getConstant(CallFrame* frame) {
 	return frame->closure->function->chunk.constants.values[index];
 }
 
+static inline bool isInteger(double value) {
+	return floor(value) == value;
+}
+
 static InterpreterResult run(VM* vm) {
 	CallFrame* frame = &vm->frames[vm->frameCount - 1];
 #define READ_BYTE() (*frame->ip++)
@@ -280,6 +285,23 @@ static InterpreterResult run(VM* vm) {
 		double b = AS_NUMBER(pop(vm)); \
 		double a = AS_NUMBER(pop(vm)); \
 		push(vm, valueType(a op b)); \
+	} while (false)
+
+#define BITWISE_BINARY_OP(op) \
+	do { \
+		if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
+			runtimeError(vm, "Operands must be numbers."); \
+			return INTERPRETER_RUNTIME_ERR; \
+		} \
+		double b = AS_NUMBER(pop(vm)); \
+		double a = AS_NUMBER(pop(vm)); \
+		if (!isInteger(a) || !isInteger(b)) { \
+			runtimeError(vm, "Operands must be integers."); \
+			return INTERPRETER_RUNTIME_ERR; \
+		} \
+		intmax_t aInt = (intmax_t)a; \
+		intmax_t bInt = (intmax_t)b; \
+		push(vm, NUMBER_VAL(aInt op bInt)); \
 	} while (false)
 
 	for (;;) {
@@ -440,6 +462,43 @@ static InterpreterResult run(VM* vm) {
 			case OP_SUB: BINARY_OP(NUMBER_VAL, -); break;
 			case OP_MUL: BINARY_OP(NUMBER_VAL, *); break;
 			case OP_DIV: BINARY_OP(NUMBER_VAL, /); break;
+
+			case OP_BIT_NOT: {
+				if (!IS_NUMBER(peek(vm, 0))) {
+					runtimeError(vm, "Operand must be a number.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+				double value = AS_NUMBER(pop(vm));
+				if (!isInteger(value)) {
+					runtimeError(vm, "Operand must be an integer.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+				intmax_t valInt = (intmax_t)value;
+				push(vm, NUMBER_VAL(~valInt));
+				break;
+			}
+
+			case OP_AND: BITWISE_BINARY_OP(&); break;
+			case OP_OR: BITWISE_BINARY_OP(|); break;
+			case OP_XOR: BITWISE_BINARY_OP(^); break;
+			case OP_LSH: BITWISE_BINARY_OP(<<); break;
+			case OP_ASH: BITWISE_BINARY_OP(>>); break;
+			case OP_RSH: {
+				if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {
+						runtimeError(vm, "Operands must be numbers.");
+						return INTERPRETER_RUNTIME_ERR;
+				}
+				double b = AS_NUMBER(pop(vm));
+				double a = AS_NUMBER(pop(vm));
+				if (!isInteger(a) || !isInteger(b)) {
+					runtimeError(vm, "Operands must be integers.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+				uintmax_t aInt = (uintmax_t)a;
+				uintmax_t bInt = (uintmax_t)b;
+				push(vm, NUMBER_VAL(aInt >> bInt));
+				break;
+			}
 
 			case OP_EQUAL: {
 				Value b = pop(vm);
