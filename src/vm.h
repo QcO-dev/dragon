@@ -21,6 +21,7 @@ struct VM {
 	Table globals;
 	Table strings;
 	ObjString* constructorString;
+	ObjClass* objectClass;
 	Compiler* compiler;
 	ObjUpvalue* openUpvalues;
 	size_t bytesAllocated;
