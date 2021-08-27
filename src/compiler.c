@@ -40,7 +40,6 @@ typedef struct Compiler Compiler;
 
 typedef struct ClassCompiler {
 	struct ClassCompiler* enclosing;
-	bool hasSuperclass;
 } ClassCompiler;
 
 struct Compiler {
@@ -510,9 +509,6 @@ static void super_(Compiler* compiler, bool canAssign) {
 	if (compiler->currentClass == NULL) {
 		error(compiler->parser, "Use of 'super' is not permitted outside of a class.");
 	}
-	else if (!compiler->currentClass->hasSuperclass) {
-		error(compiler->parser, "Use of 'super' is not permitted inside a class with no superclass.");
-	}
 	consume(compiler, TOKEN_DOT, "Expected '.' after 'super'.");
 	consume(compiler, TOKEN_IDENTIFIER, "Expected superclass method name.");
 	uint32_t name = identifierConstant(compiler, &compiler->parser->previous);
@@ -871,25 +867,26 @@ static void classDeclaration(Compiler* compiler) {
 
 	ClassCompiler classCompiler;
 	classCompiler.enclosing = compiler->currentClass;
-	classCompiler.hasSuperclass = false;
 	compiler->currentClass = &classCompiler;
 
-	if (match(compiler, TOKEN_LESS)) {
+	if (match(compiler, TOKEN_COLON)) {
 		consume(compiler, TOKEN_IDENTIFIER, "Expected superclass name.");
 		variable(compiler, false);
 		
 		if (identifiersEqual(&className, &compiler->parser->previous)) {
 			error(compiler->parser, "A class cannot inherit from itself.");
 		}
-
-		beginScope(compiler);
-		addLocal(compiler, syntheticToken("super"));
-		defineVariable(compiler, 0);
-
-		namedVariable(compiler, className, false);
-		emitByte(compiler, OP_INHERIT);
-		classCompiler.hasSuperclass = true;
 	}
+	else {
+		emitByte(compiler, OP_OBJECT);
+	}
+
+	beginScope(compiler);
+	addLocal(compiler, syntheticToken("super"));
+	defineVariable(compiler, 0);
+
+	namedVariable(compiler, className, false);
+	emitByte(compiler, OP_INHERIT);
 
 	namedVariable(compiler, className, false);
 	consume(compiler, TOKEN_LEFT_BRACE, "Expected '{' before class body.");
@@ -899,9 +896,7 @@ static void classDeclaration(Compiler* compiler) {
 	consume(compiler, TOKEN_RIGHT_BRACE, "Expected '}' after class body");
 	emitByte(compiler, OP_POP);
 
-	if (classCompiler.hasSuperclass) {
-		endScope(compiler);
-	}
+	endScope(compiler);
 
 	compiler->currentClass = compiler->currentClass->enclosing;
 }
@@ -930,6 +925,7 @@ ParseRule rules[] = {
   [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
   [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
   [TOKEN_DOT] = {NULL, dot, PREC_CALL},
+  [TOKEN_COLON] = {NULL, NULL, PREC_NONE},
   [TOKEN_MINUS] = {unary,  binary, PREC_TERM},
   [TOKEN_PLUS] = {NULL, binary, PREC_TERM},
   [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
