@@ -30,7 +30,7 @@ struct ObjFunction {
 	ObjString* name;
 };
 
-typedef Value(*NativeFn)(uint8_t argCount, Value* args);
+typedef Value(*NativeFn)(VM* vm, uint8_t argCount, Value* args);
 
 typedef struct {
 	Obj obj;
@@ -85,6 +85,8 @@ ObjClosure* newClosure(VM* vm, ObjFunction* function);
 ObjUpvalue* newUpvalue(VM* vm, Value* slot);
 ObjString* takeString(VM* vm, char* chars, size_t length);
 ObjString* copyString(VM* vm, const char* chars, size_t length);
+ObjString* makeStringf(VM* vm, const char* format, ...);
+ObjString* objectToString(VM* vm, Value value);
 void printObject(Value value);
 
 static inline bool isObjType(Value value, ObjType type) {

@@ -26,6 +26,7 @@ struct VM {
 	ObjUpvalue* openUpvalues;
 	size_t bytesAllocated;
 	size_t nextGC;
+	bool shouldGC;
 	Obj* objects;
 	size_t grayCount;
 	size_t grayCapacity;

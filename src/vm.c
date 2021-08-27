@@ -13,17 +13,22 @@
 
 static void defineNative(VM* vm, const char* name, NativeFn function);
 
-static Value clockNative(uint8_t argCount, Value* args) {
+static Value clockNative(VM* vm, uint8_t argCount, Value* args) {
 	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
-static Value printNative(uint8_t argCount, Value* args) {
+static Value printNative(VM* vm, uint8_t argCount, Value* args) {
 	for (size_t i = 0; i < argCount; i++) {
 		printValue(args[i]);
 		printf(" ");
 	}
 	printf("\n");
 	return NULL_VAL;
+}
+
+static Value toStringNative(VM* vm, uint8_t argCount, Value* args) {
+	//TODO arg count safety
+	return OBJ_VAL(valueToString(vm, args[0]));
 }
 
 static void resetStack(VM* vm) {
@@ -37,6 +42,7 @@ void initVM(VM* vm) {
 	vm->objects = NULL;
 	vm->bytesAllocated = 0;
 	vm->nextGC = 1024 * 1024;
+	vm->shouldGC = true;
 	vm->grayCount = 0;
 	vm->grayCapacity = 0;
 	vm->grayStack = NULL;
@@ -56,6 +62,7 @@ void initVM(VM* vm) {
 
 	tableSet(vm, &vm->globals, copyString(vm, "NaN", 3), NUMBER_VAL(nan("0")));
 	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
+	defineNative(vm, "toString", toStringNative);
 	defineNative(vm, "clock", clockNative);
 	defineNative(vm, "print", printNative);
 }
@@ -191,7 +198,7 @@ static bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				return call(vm, AS_CLOSURE(callee), argCount);
 			case OBJ_NATIVE: {
 				NativeFn native = AS_NATIVE(callee);
-				Value result = native(argCount, vm->stackTop - argCount);
+				Value result = native(vm, argCount, vm->stackTop - argCount);
 				vm->stackTop -= ((size_t)argCount) + 1;
 				push(vm, result);
 				return true;

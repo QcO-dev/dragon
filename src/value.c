@@ -38,6 +38,29 @@ void printNumber(double value) {
 	}
 }
 
+ObjString* numberToString(VM* vm, double value) {
+	if (isinf(value)) {
+		return makeStringf(vm, "%sInfinity", signbit(value) ? "-" : "");
+	}
+	else if (isnan(value)) {
+		return copyString(vm, "NaN", 3);
+	}
+	return makeStringf(vm, "%g", value);
+}
+
+ObjString* valueToString(VM* vm, Value value) {
+	switch (value.type) {
+		case VAL_BOOL:
+			return AS_BOOL(value) ? copyString(vm, "true", 4) : copyString(vm, "false", 5);
+		case VAL_NULL:
+			return copyString(vm, "null", 4);
+		case VAL_NUMBER:
+			return numberToString(vm, AS_NUMBER(value));
+		case VAL_OBJ:
+			return objectToString(vm, value);
+	}
+}
+
 void printValue(Value value) {
 	switch (value.type) {
 		case VAL_BOOL: 

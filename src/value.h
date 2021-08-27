@@ -35,6 +35,7 @@ void initValueArray(ValueArray* array);
 void freeValueArray(VM* vm, ValueArray* array);
 void writeValueArray(VM* vm, ValueArray* array, Value value);
 void printValue(Value value);
+ObjString* valueToString(VM* vm, Value value);
 bool isFalsey(Value value);
 bool valuesEqual(Value a, Value b);
 
