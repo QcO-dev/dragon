@@ -47,6 +47,13 @@ void initVM(VM* vm) {
 	vm->constructorString = NULL; // GC Call
 	vm->constructorString = copyString(vm, "constructor", 11);
 
+	ObjString* objectClassName = copyString(vm, "Object", 6);
+	push(vm, OBJ_VAL(objectClassName)); // GC
+	vm->objectClass = NULL;
+	vm->objectClass = newClass(vm, objectClassName);
+	tableSet(vm, &vm->globals, objectClassName, OBJ_VAL(vm->objectClass));
+	pop(vm);
+
 	tableSet(vm, &vm->globals, copyString(vm, "NaN", 3), NUMBER_VAL(nan("0")));
 	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
 	defineNative(vm, "clock", clockNative);
@@ -331,6 +338,7 @@ static InterpreterResult run(VM* vm) {
 			case OP_NULL: push(vm, NULL_VAL); break;
 			case OP_TRUE: push(vm, BOOL_VAL(true)); break;
 			case OP_FALSE: push(vm, BOOL_VAL(false)); break;
+			case OP_OBJECT: push(vm, OBJ_VAL(vm->objectClass)); break;
 
 			case OP_GET_GLOBAL: {
 				ObjString* name = READ_STRING();
@@ -420,6 +428,17 @@ static InterpreterResult run(VM* vm) {
 				Value value = pop(vm);
 				pop(vm);
 				push(vm, value);
+				break;
+			}
+
+			case OP_SET_PROPERTY_KV: {
+				if (!IS_INSTANCE(peek(vm, 1))) {
+					runtimeError(vm, "Only instances contain fields.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+				ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
+				tableSet(vm, &instance->fields, READ_STRING(), peek(vm, 0));
+				pop(vm);
 				break;
 			}
 

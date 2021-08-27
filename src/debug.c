@@ -79,6 +79,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		case OP_NULL: return simpleInstruction("NULL", offset);
 		case OP_TRUE: return simpleInstruction("TRUE", offset);
 		case OP_FALSE: return simpleInstruction("FALSE", offset);
+		case OP_OBJECT: return simpleInstruction("OBJECT", offset);
 		case OP_POP: return simpleInstruction("POP", offset);
 		case OP_NOT: return simpleInstruction("NOT", offset);
 		case OP_NEGATE: return simpleInstruction("NEGATE", offset);
@@ -127,6 +128,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		case OP_SUPER_INVOKE: return invokeInstruction("SUPER_INVOKE", chunk, offset);
 		case OP_GET_PROPERTY: return constantInstruction("GET_PROPERTY", chunk, offset);
 		case OP_SET_PROPERTY: return constantInstruction("SET_PROPERTY", chunk, offset);
+		case OP_SET_PROPERTY_KV: return constantInstruction("SET_PROPERTY_KV", chunk, offset);
 		case OP_GET_SUPER: return constantInstruction("GET_SUPER", chunk, offset);
 		case OP_RETURN: return simpleInstruction("RETURN", offset);
 		default: {
