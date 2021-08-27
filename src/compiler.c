@@ -59,13 +59,17 @@ struct Compiler {
 typedef enum {
 	PREC_NONE,
 	PREC_ASSIGNMENT,  // =
-	PREC_OR,  // or
-	PREC_AND, // and
+	PREC_OR,  // ||
+	PREC_AND, // &&
+	PREC_BIT_OR, // |
+	PREC_BIT_XOR, // ^
+	PREC_BIT_AND, // &
 	PREC_EQUALITY,  // == !=
 	PREC_COMPARISON,  // < > <= >=
+	PREC_SHIFT, // << >> >>>
 	PREC_TERM,  // + -
 	PREC_FACTOR,  // * /
-	PREC_UNARY, // ! -
+	PREC_UNARY, // ! - ~
 	PREC_CALL,  // . ()
 	PREC_PRIMARY
 } Precedence;
@@ -583,6 +587,7 @@ static void unary(Compiler* compiler, bool canAssign) {
 	switch (operatorType) {
 		case TOKEN_MINUS: emitByte(compiler, OP_NEGATE); break;
 		case TOKEN_BANG: emitByte(compiler, OP_NOT); break;
+		case TOKEN_BIT_NOT: emitByte(compiler, OP_BIT_NOT); break;
 		default: return; // Unreachable
 	}
 }
@@ -597,6 +602,12 @@ static void binary(Compiler* compiler, bool canAssign) {
 		case TOKEN_MINUS: emitByte(compiler, OP_SUB); break;
 		case TOKEN_STAR: emitByte(compiler, OP_MUL); break;
 		case TOKEN_SLASH: emitByte(compiler, OP_DIV); break;
+		case TOKEN_BIT_AND: emitByte(compiler, OP_AND); break;
+		case TOKEN_BIT_OR: emitByte(compiler, OP_OR); break;
+		case TOKEN_XOR: emitByte(compiler, OP_XOR); break;
+		case TOKEN_LEFT_SHIFT: emitByte(compiler, OP_LSH); break;
+		case TOKEN_RIGHT_SHIFT: emitByte(compiler, OP_ASH); break;
+		case TOKEN_RIGHT_SHIFT_U: emitByte(compiler, OP_RSH); break;
 		case TOKEN_BANG_EQUAL: emitPair(compiler, OP_EQUAL, OP_NOT); break;
 		case TOKEN_EQUAL_EQUAL: emitByte(compiler, OP_EQUAL); break;
 		case TOKEN_GREATER: emitByte(compiler, OP_GREATER); break;
@@ -789,7 +800,6 @@ static void synchronize(Compiler* compiler) {
 			case TOKEN_FOR:
 			case TOKEN_IF:
 			case TOKEN_WHILE:
-			case TOKEN_PRINT:
 			case TOKEN_RETURN:
 				return;
 			default:
@@ -904,6 +914,13 @@ ParseRule rules[] = {
   [TOKEN_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
   [TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
   [TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
+  [TOKEN_BIT_AND] = {NULL, binary, PREC_BIT_AND},
+  [TOKEN_BIT_OR] = {NULL, binary, PREC_BIT_OR},
+  [TOKEN_BIT_NOT] = {unary, NULL, PREC_UNARY},
+  [TOKEN_XOR] = {NULL, binary, PREC_BIT_XOR},
+  [TOKEN_LEFT_SHIFT] = {NULL, binary, PREC_SHIFT},
+  [TOKEN_RIGHT_SHIFT] = {NULL, binary, PREC_SHIFT},
+  [TOKEN_RIGHT_SHIFT_U] = {NULL, binary, PREC_SHIFT},
   [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
   [TOKEN_STRING] = {string, NULL, PREC_NONE},
   [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
@@ -916,7 +933,6 @@ ParseRule rules[] = {
   [TOKEN_IF] = {NULL, NULL, PREC_NONE},
   [TOKEN_NULL] = {literal, NULL, PREC_NONE},
   [TOKEN_OR] = {NULL, or_, PREC_OR},
-  [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
   [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
   [TOKEN_SUPER] = {super_, NULL, PREC_NONE},
   [TOKEN_THIS] = {this_, NULL, PREC_NONE},
