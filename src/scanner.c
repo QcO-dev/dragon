@@ -80,7 +80,8 @@ static void skipWhitespace(Scanner* scanner) {
 }
 
 static Token string(Scanner* scanner) {
-	while (peek(scanner) != '"' && !isAtEnd(scanner)) {
+	char ending = scanner->current[-1];
+	while (peek(scanner) != ending && !isAtEnd(scanner)) {
 		if (peek(scanner) == '\n') scanner->line++;
 		advance(scanner);
 	}
@@ -121,7 +122,6 @@ static TokenType checkKeyword(Scanner* scanner, size_t start, size_t length, con
 
 static TokenType identifierType(Scanner* scanner) {
 	switch (scanner->start[0]) {
-		case 'a': return checkKeyword(scanner, 1, 2, "nd", TOKEN_AND);
 		case 'c': return checkKeyword(scanner, 1, 4, "lass", TOKEN_CLASS);
 		case 'e': return checkKeyword(scanner, 1, 3, "lse", TOKEN_ELSE);
 		case 'f':
@@ -135,7 +135,6 @@ static TokenType identifierType(Scanner* scanner) {
 			break;
 		case 'i': return checkKeyword(scanner, 1, 1, "f", TOKEN_IF);
 		case 'n': return checkKeyword(scanner, 1, 3, "ull", TOKEN_NULL);
-		case 'o': return checkKeyword(scanner, 1, 1, "r", TOKEN_OR);
 		case 'r': return checkKeyword(scanner, 1, 5, "eturn", TOKEN_RETURN);
 		case 's': return checkKeyword(scanner, 1, 4, "uper", TOKEN_SUPER);
 		case 't':
@@ -166,6 +165,7 @@ Token scanToken(Scanner* scanner) {
 	char c = advance(scanner);
 	if (isAlpha(c)) return identifier(scanner);
 	if (isDigit(c)) return number(scanner);
+	if (c == '"' || c == '\'') return string(scanner);
 
 	switch (c) {
 		case '(': return makeToken(scanner, TOKEN_LEFT_PAREN);
@@ -183,7 +183,8 @@ Token scanToken(Scanner* scanner) {
 		case '=': return makeToken(scanner, match(scanner, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
 		case '<': return makeToken(scanner, match(scanner, '=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
 		case '>': return makeToken(scanner, match(scanner, '=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
-		case '"': return string(scanner);
+		case '&': return makeToken(scanner, match(scanner, '&') ? TOKEN_AND : TOKEN_BIT_AND);
+		case '|': return makeToken(scanner, match(scanner, '|') ? TOKEN_OR : TOKEN_BIT_OR);
 	}
 
 	return errorToken(scanner, "Unexpected character.");

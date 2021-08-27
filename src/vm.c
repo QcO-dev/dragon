@@ -560,7 +560,6 @@ static InterpreterResult run(VM* vm) {
 #undef READ_BYTE
 #undef READ_SHORT
 #undef READ_CONSTANT
-#undef READ_CONSTANT_X24
 #undef READ_STRING
 #undef BINARY_OP
 }
