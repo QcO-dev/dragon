@@ -181,6 +181,7 @@ Token scanToken(Scanner* scanner) {
 		case '*': return makeToken(scanner, TOKEN_STAR);
 		case '^': return makeToken(scanner, TOKEN_XOR);
 		case '~': return makeToken(scanner, TOKEN_BIT_NOT);
+		case ':': return makeToken(scanner, TOKEN_COLON);
 		case '!': return makeToken(scanner, match(scanner, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
 		case '=': return makeToken(scanner, match(scanner, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
 		case '<': {

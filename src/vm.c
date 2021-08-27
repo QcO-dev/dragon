@@ -423,6 +423,17 @@ static InterpreterResult run(VM* vm) {
 				break;
 			}
 
+			case OP_SET_PROPERTY_KV: {
+				if (!IS_INSTANCE(peek(vm, 1))) {
+					runtimeError(vm, "Only instances contain fields.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+				ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
+				tableSet(vm, &instance->fields, READ_STRING(), peek(vm, 0));
+				pop(vm);
+				break;
+			}
+
 			case OP_GET_SUPER: {
 				ObjString* name = READ_STRING();
 				ObjClass* superclass = AS_CLASS(pop(vm));

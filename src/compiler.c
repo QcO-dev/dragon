@@ -533,6 +533,25 @@ static void super_(Compiler* compiler, bool canAssign) {
 	}
 }
 
+static void object(Compiler* compiler, bool canAssign) {
+	if (compiler->parser->current.type != TOKEN_RIGHT_BRACE) {
+		do {
+			consume(compiler, TOKEN_IDENTIFIER, "Expected identifier key for object key-value pair.");
+
+			uint32_t name = identifierConstant(compiler, &compiler->parser->previous);
+
+			consume(compiler, TOKEN_COLON, "Expected ':' between key-value pair.");
+
+			expression(compiler);
+
+			emitByte(compiler, OP_SET_PROPERTY_KV);
+			encodeConstant(compiler, name);
+		} while (match(compiler, TOKEN_COMMA));
+	}
+
+	consume(compiler, TOKEN_RIGHT_BRACE, "Expected '}' after object body.");
+}
+
 static uint8_t argumentList(Compiler* compiler) {
 	uint8_t argCount = 0;
 	if (!check(compiler, TOKEN_RIGHT_PAREN)) {
@@ -897,7 +916,7 @@ static void declaration(Compiler* compiler) {
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN] = {grouping, call, PREC_CALL},
   [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
-  [TOKEN_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
+  [TOKEN_LEFT_BRACE] = {NULL, object, PREC_CALL},
   [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
   [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
   [TOKEN_DOT] = {NULL, dot, PREC_CALL},
