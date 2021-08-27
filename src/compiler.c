@@ -538,11 +538,15 @@ static void object(Compiler* compiler, bool canAssign) {
 		do {
 			consume(compiler, TOKEN_IDENTIFIER, "Expected identifier key for object key-value pair.");
 
+			Token identifier = compiler->parser->previous;
 			uint32_t name = identifierConstant(compiler, &compiler->parser->previous);
 
-			consume(compiler, TOKEN_COLON, "Expected ':' between key-value pair.");
-
-			expression(compiler);
+			if (match(compiler, TOKEN_COLON)) {
+				expression(compiler);
+			}
+			else {
+				namedVariable(compiler, identifier, false);
+			}
 
 			emitByte(compiler, OP_SET_PROPERTY_KV);
 			encodeConstant(compiler, name);
