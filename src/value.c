@@ -1,6 +1,7 @@
 #include "value.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "memory.h"
 #include "object.h"
 
@@ -25,6 +26,18 @@ void writeValueArray(VM* vm, ValueArray* array, Value value) {
 	array->values[array->count++] = value;
 }
 
+void printNumber(double value) {
+	if (isinf(value)) {
+		printf("%sInfinity", signbit(value) ? "-" : "");
+	}
+	else if (isnan(value)) {
+		printf("NaN");
+	}
+	else {
+		printf("%g", value);
+	}
+}
+
 void printValue(Value value) {
 	switch (value.type) {
 		case VAL_BOOL: 
@@ -34,7 +47,7 @@ void printValue(Value value) {
 			printf("null");
 			break;
 		case VAL_NUMBER:
-			printf("%g", AS_NUMBER(value)); 
+			printNumber(AS_NUMBER(value)); 
 			break;
 		case VAL_OBJ:
 			printObject(value);

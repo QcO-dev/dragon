@@ -47,6 +47,8 @@ void initVM(VM* vm) {
 	vm->constructorString = NULL; // GC Call
 	vm->constructorString = copyString(vm, "constructor", 11);
 
+	tableSet(vm, &vm->globals, copyString(vm, "NaN", 3), NUMBER_VAL(nan("0")));
+	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
 	defineNative(vm, "clock", clockNative);
 	defineNative(vm, "print", printNative);
 }
