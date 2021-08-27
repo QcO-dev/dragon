@@ -34,7 +34,7 @@ static int constantInstruction(const char* name, Chunk* chunk, int offset) {
 	size_t size = readUleb128(&chunk->code[offset + 1], &constant);
 
 	printf("%-16s %4zu '", name, constant);
-	printValue(chunk->constants.values[constant]);
+	printValueRepr(chunk->constants.values[constant]);
 	printf("'\n");
 	return offset + (int)size + 1;
 }
@@ -57,7 +57,7 @@ static int invokeInstruction(const char* name, Chunk* chunk, int offset) {
 	size_t size = readUleb128(&chunk->code[offset + 1], &constant);
 	uint8_t argCount = chunk->code[offset + 2];
 	printf("%-16s (%d args) %4zu '", name, argCount, constant);
-	printValue(chunk->constants.values[constant]);
+	printValueRepr(chunk->constants.values[constant]);
 	printf("'\n");
 	return offset + size + 2;
 }
@@ -106,7 +106,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 			offset++;
 			uint8_t constant = chunk->code[offset++];
 			printf("%-16s %4d ", "CLOSURE", constant);
-			printValue(chunk->constants.values[constant]);
+			printValueRepr(chunk->constants.values[constant]);
 			printf("\n");
 
 			ObjFunction* function = AS_FUNCTION(chunk->constants.values[constant]);

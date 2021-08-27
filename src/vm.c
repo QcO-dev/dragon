@@ -19,7 +19,7 @@ static Value clockNative(VM* vm, uint8_t argCount, Value* args) {
 
 static Value printNative(VM* vm, uint8_t argCount, Value* args) {
 	for (size_t i = 0; i < argCount; i++) {
-		printValue(args[i]);
+		printf("%s", valueToString(vm, args[i])->chars);
 		printf(" ");
 	}
 	printf("\n");
@@ -325,7 +325,7 @@ static InterpreterResult run(VM* vm) {
 		printf("     ");
 		for (Value* slot = vm->stack; slot < vm->stackTop; slot++) {
 			printf("[ ");
-			printValue(*slot);
+			printValueRepr(*slot);
 			printf(" ]");
 		}
 		printf("\n");

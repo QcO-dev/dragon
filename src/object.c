@@ -175,7 +175,7 @@ static void printFunction(ObjFunction* function) {
 	printf("<function %s>", function->name->chars);
 }
 
-void printObject(Value value) {
+void printObjectRepr(Value value) {
 	switch (OBJ_TYPE(value)) {
 		case OBJ_BOUND_METHOD:
 			printFunction(AS_BOUND_METHOD(value)->method->function);
@@ -196,7 +196,7 @@ void printObject(Value value) {
 			printf("<native function>");
 			break;
 		case OBJ_STRING:
-			printf("%s", AS_CSTRING(value));
+			printf("\"%s\"", AS_CSTRING(value));
 			break;
 		case OBJ_UPVALUE:
 			printf("upvalue");

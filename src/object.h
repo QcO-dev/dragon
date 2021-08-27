@@ -87,7 +87,7 @@ ObjString* takeString(VM* vm, char* chars, size_t length);
 ObjString* copyString(VM* vm, const char* chars, size_t length);
 ObjString* makeStringf(VM* vm, const char* format, ...);
 ObjString* objectToString(VM* vm, Value value);
-void printObject(Value value);
+void printObjectRepr(Value value);
 
 static inline bool isObjType(Value value, ObjType type) {
 	return IS_OBJ(value) && AS_OBJ(value)->type == type;

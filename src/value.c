@@ -61,7 +61,7 @@ ObjString* valueToString(VM* vm, Value value) {
 	}
 }
 
-void printValue(Value value) {
+void printValueRepr(Value value) {
 	switch (value.type) {
 		case VAL_BOOL: 
 			printf(AS_BOOL(value) ? "true" : "false");
@@ -73,7 +73,7 @@ void printValue(Value value) {
 			printNumber(AS_NUMBER(value)); 
 			break;
 		case VAL_OBJ:
-			printObject(value);
+			printObjectRepr(value);
 			break;
 	}
 }
