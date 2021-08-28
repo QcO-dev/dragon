@@ -30,7 +30,7 @@ struct ObjFunction {
 	ObjString* name;
 };
 
-typedef Value(*NativeFn)(VM* vm, uint8_t argCount, Value* args);
+typedef Value(*NativeFn)(VM* vm, uint8_t argCount, Value* args, bool* hasError);
 
 typedef struct {
 	Obj obj;

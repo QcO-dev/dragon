@@ -12,12 +12,13 @@
 #include <math.h>
 
 static void defineNative(VM* vm, const char* name, size_t arity, NativeFn function);
+static void runtimeError(VM* vm, const char* format, ...);
 
-static Value clockNative(VM* vm, uint8_t argCount, Value* args) {
+static Value clockNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
 	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
-static Value printNative(VM* vm, uint8_t argCount, Value* args) {
+static Value printNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
 	for (size_t i = 0; i < argCount; i++) {
 		printf("%s", valueToString(vm, args[i])->chars);
 		printf(" ");
@@ -26,14 +27,21 @@ static Value printNative(VM* vm, uint8_t argCount, Value* args) {
 	return NULL_VAL;
 }
 
-static Value toStringNative(VM* vm, uint8_t argCount, Value* args) {
-	//TODO arg count safety
+static Value toStringNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
 	return OBJ_VAL(valueToString(vm, args[0]));
 }
 
-static Value reprNative(VM* vm, uint8_t argCount, Value* args) {
-	//TODO arg count safety
+static Value reprNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
 	return OBJ_VAL(valueToRepr(vm, args[0]));
+}
+
+static Value sqrtNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
+	if (!IS_NUMBER(args[0])) {
+		runtimeError(vm, "Expected number as first argument to sqrt.");
+		*hasError = true;
+		return NULL_VAL;
+	}
+	return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
 }
 
 static void resetStack(VM* vm) {
@@ -70,6 +78,7 @@ void initVM(VM* vm) {
 	defineNative(vm, "toString", 1, toStringNative);
 	defineNative(vm, "repr", 1, reprNative);
 	defineNative(vm, "clock", 0, clockNative);
+	defineNative(vm, "sqrt", 1, sqrtNative);
 	defineNative(vm, "print", 1, printNative);
 }
 
@@ -211,10 +220,12 @@ static bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				}
 
 				NativeFn nativeFunction = native->function;
-				Value result = nativeFunction(vm, argCount, vm->stackTop - argCount);
+				bool hasError = false;
+
+				Value result = nativeFunction(vm, argCount, vm->stackTop - argCount, &hasError);
 				vm->stackTop -= ((size_t)argCount) + 1;
 				push(vm, result);
-				return true;
+				return !hasError;
 			}
 			default:
 				break; // Non-callable object.
@@ -330,7 +341,7 @@ static InterpreterResult run(VM* vm) {
 		} \
 		intmax_t aInt = (intmax_t)a; \
 		intmax_t bInt = (intmax_t)b; \
-		push(vm, NUMBER_VAL(aInt op bInt)); \
+		push(vm, NUMBER_VAL((double)(aInt op bInt))); \
 	} while (false)
 
 	for (;;) {
@@ -515,7 +526,7 @@ static InterpreterResult run(VM* vm) {
 					return INTERPRETER_RUNTIME_ERR;
 				}
 				intmax_t valInt = (intmax_t)value;
-				push(vm, NUMBER_VAL(~valInt));
+				push(vm, NUMBER_VAL((double)~valInt));
 				break;
 			}
 
