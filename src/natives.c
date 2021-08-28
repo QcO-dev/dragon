@@ -33,12 +33,56 @@ static Value sqrtNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
 	return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
 }
 
+static Value callNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
+	return callDragonFromNative(vm, args[0], 0, hasError);
+}
+
 void defineGlobalNatives(VM* vm) {
 	defineNative(vm, "toString", 1, toStringNative);
 	defineNative(vm, "repr", 1, reprNative);
 	defineNative(vm, "clock", 0, clockNative);
 	defineNative(vm, "sqrt", 1, sqrtNative);
+	defineNative(vm, "call", 1, callNative);
 	defineNative(vm, "print", 1, printNative);
+}
+
+/*
+	Utility functions 
+	- callDragonFromNative allows for a value to be called from a native function and its value returned.
+	- defineNative creates the needed objects and adds them to the global variable table in the VM, for a given native method.
+*/
+
+Value callDragonFromNative(VM* vm, Value callee, size_t argCount, bool* hasError) {
+	if (!IS_NATIVE(callee)) {
+		callValue(vm, callee, argCount);
+
+		bool functionErr = false;
+		Value returnValue = runFunction(vm, &functionErr);
+		if (functionErr) {
+			*hasError = true;
+			return NULL_VAL;
+		}
+
+		for (size_t i = 0; i < argCount; i++) pop(vm);
+
+		return returnValue;
+	}
+	else {
+		ObjNative* native = AS_NATIVE(callee);
+		if (argCount != native->arity) {
+			runtimeError(vm, "Expected %zu argument(s) but got %u.", native->arity, argCount);
+			*hasError = true;
+			return NULL_VAL;
+		}
+
+		bool functionErr = false;
+		Value returnValue = native->function(vm, argCount, vm->stackTop - argCount, &functionErr);
+		if (functionErr) {
+			*hasError = true;
+			return NULL_VAL;
+		}
+		return returnValue;
+	}
 }
 
 void defineNative(VM* vm, const char* name, size_t arity, NativeFn function) {
