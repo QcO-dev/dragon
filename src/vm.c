@@ -240,8 +240,23 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 }
 
 static void concatenate(VM* vm) {
-	ObjString* b = valueToString(vm, peek(vm, 0));
-	ObjString* a = valueToString(vm, peek(vm, 1));
+	ObjString* b;
+	ObjString* a;
+	// Swaps stack so that .toString() implicit call functions (calling convention)
+	if (IS_INSTANCE(peek(vm, 1))) {
+		Value valB = pop(vm);
+		Value valA = pop(vm);
+		push(vm, valB);
+		push(vm, valA);
+
+		b = valueToString(vm, peek(vm, 1));
+		a = valueToString(vm, peek(vm, 0));
+	}
+	else {
+		b = valueToString(vm, peek(vm, 0));
+		a = valueToString(vm, peek(vm, 1));
+	}
+	
 
 	size_t length = a->length + b->length;
 	char* chars = ALLOCATE(vm, char, length + 1);

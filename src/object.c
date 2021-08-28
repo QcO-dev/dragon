@@ -2,6 +2,7 @@
 #include "memory.h"
 #include "value.h"
 #include "vm.h"
+#include "natives.h"
 #include "table.h"
 #include <stdio.h>
 #include <string.h>
@@ -145,6 +146,22 @@ ObjString* functionToString(VM* vm, ObjFunction* function) {
 	return makeStringf(vm, "<function %s>", function->name->chars);
 }
 
+ObjString* instanceToString(VM* vm, ObjInstance* instance) {
+	Value method;
+	if (tableGet(&instance->fields, copyString(vm, "toString", 8), &method)) {
+		bool hasError = false;
+		Value stringForm = callDragonFromNative(vm, method, 0, &hasError);
+		if (!hasError) return AS_STRING(stringForm);
+	}
+	else if (tableGet(&instance->klass->methods, copyString(vm, "toString", 8), &method)) {
+		bool hasError = false;
+		Value stringForm = callDragonFromNative(vm, method, 0, &hasError);
+		if (!hasError) return AS_STRING(stringForm);
+	}
+
+	return makeStringf(vm, "<instance %s>", instance->klass->name->chars);
+}
+
 ObjString* objectToString(VM* vm, Value value) {
 	switch (OBJ_TYPE(value)) {
 		case OBJ_BOUND_METHOD:
@@ -152,7 +169,7 @@ ObjString* objectToString(VM* vm, Value value) {
 		case OBJ_CLASS:
 			return makeStringf(vm, "<class %s>", AS_CLASS(value)->name->chars);
 		case OBJ_INSTANCE:
-			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
+			return instanceToString(vm, AS_INSTANCE(value));
 		case OBJ_CLOSURE:
 			return functionToString(vm, AS_CLOSURE(value)->function);
 		case OBJ_FUNCTION:
