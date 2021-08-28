@@ -55,9 +55,10 @@ ObjFunction* newFunction(VM* vm) {
 	return function;
 }
 
-ObjNative* newNative(VM* vm, NativeFn function) {
+ObjNative* newNative(VM* vm, size_t arity, NativeFn function) {
 	ObjNative* native = ALLOCATE_OBJ(vm, ObjNative, OBJ_NATIVE);
 	native->function = function;
+	native->arity = arity;
 	return native;
 }
 

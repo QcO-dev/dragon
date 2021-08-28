@@ -11,7 +11,7 @@
 #include <time.h>
 #include <math.h>
 
-static void defineNative(VM* vm, const char* name, NativeFn function);
+static void defineNative(VM* vm, const char* name, size_t arity, NativeFn function);
 
 static Value clockNative(VM* vm, uint8_t argCount, Value* args) {
 	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
@@ -67,10 +67,10 @@ void initVM(VM* vm) {
 
 	tableSet(vm, &vm->globals, copyString(vm, "NaN", 3), NUMBER_VAL(nan("0")));
 	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
-	defineNative(vm, "toString", toStringNative);
-	defineNative(vm, "repr", reprNative);
-	defineNative(vm, "clock", clockNative);
-	defineNative(vm, "print", printNative);
+	defineNative(vm, "toString", 1, toStringNative);
+	defineNative(vm, "repr", 1, reprNative);
+	defineNative(vm, "clock", 0, clockNative);
+	defineNative(vm, "print", 1, printNative);
 }
 
 void freeVM(VM* vm) {
@@ -152,9 +152,9 @@ static void closeUpvalues(VM* vm, Value* last) {
 	}
 }
 
-static void defineNative(VM* vm, const char* name, NativeFn function) {
+static void defineNative(VM* vm, const char* name, size_t arity, NativeFn function) {
 	push(vm, OBJ_VAL(copyString(vm, name, strlen(name))));
-	push(vm, OBJ_VAL(newNative(vm, function)));
+	push(vm, OBJ_VAL(newNative(vm, arity, function)));
 	tableSet(vm, &vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
 	pop(vm);
 	pop(vm);
@@ -203,8 +203,15 @@ static bool callValue(VM* vm, Value callee, uint8_t argCount) {
 			case OBJ_CLOSURE:
 				return call(vm, AS_CLOSURE(callee), argCount);
 			case OBJ_NATIVE: {
-				NativeFn native = AS_NATIVE(callee);
-				Value result = native(vm, argCount, vm->stackTop - argCount);
+				ObjNative* native = AS_NATIVE(callee);
+
+				if (argCount != native->arity) {
+					runtimeError(vm, "Expected %zu argument(s) but got %u.", native->arity, argCount);
+					return false;
+				}
+
+				NativeFn nativeFunction = native->function;
+				Value result = nativeFunction(vm, argCount, vm->stackTop - argCount);
 				vm->stackTop -= ((size_t)argCount) + 1;
 				push(vm, result);
 				return true;
