@@ -493,7 +493,7 @@ static void string(Compiler* compiler, bool canAssign) {
 		emitConstant(compiler, OBJ_VAL(takeString(compiler->vm, dest, length)));
 	}
 	else {
-		dest = GROW_ARRAY(compiler->vm, char, dest, length, newLength + 1);
+		dest = GROW_ARRAY(compiler->vm, char, dest, length + 1, newLength + 1);
 		emitConstant(compiler, OBJ_VAL(takeString(compiler->vm, dest, newLength)));
 	}
 }

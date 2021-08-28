@@ -167,6 +167,57 @@ ObjString* objectToString(VM* vm, Value value) {
 	}
 }
 
+static ObjString* unescapeString(VM* vm, ObjString* string) {
+#define EXPAND(c) \
+	{ \
+		*dest++ = '\\'; \
+		*dest++ = c; \
+		continue; \
+	}
+
+	char* chars = string->chars;
+	size_t length = string->length;
+
+	size_t count = 0;
+	for (size_t i = 0; i < length; i++) {
+		switch (chars[i]) {
+			case '\n':
+			case '\\':
+			case '\r':
+			case '\t':
+			case '\b':
+			case '\f':
+				count++;
+		}
+	}
+
+	if (count == 0) return string;
+
+	char* dest = ALLOCATE(vm, char, length + count + 1);
+	char* destStart = dest;
+
+	for (size_t i = 0; i < length; i++) {
+		switch (chars[i]) {
+			case '\n': EXPAND('n');
+			case '\\': EXPAND('\\');
+			case '\r': EXPAND('r');
+			case '\t': EXPAND('t');
+			case '\b': EXPAND('b');
+			case '\f': EXPAND('f');
+		}
+		*dest++ = chars[i];
+	}
+	*dest = '\0';
+
+	return takeString(vm, destStart, length + count);
+#undef EXPAND
+}
+
+ObjString* stringToRepr(VM* vm, ObjString* string) {
+	ObjString* unescaped = unescapeString(vm, string);
+	return makeStringf(vm, "\"%s\"", unescaped->chars);
+}
+
 ObjString* objectToRepr(VM* vm, Value value) {
 	switch (OBJ_TYPE(value)) {
 		case OBJ_BOUND_METHOD:
@@ -179,7 +230,7 @@ ObjString* objectToRepr(VM* vm, Value value) {
 		case OBJ_INSTANCE:
 			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
 		case OBJ_STRING:
-			return makeStringf(vm, "\"%s\"", AS_CSTRING(value));
+			return stringToRepr(vm, AS_STRING(value));
 		default: return; // Unreachable.
 	}
 }
