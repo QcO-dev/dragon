@@ -13,17 +13,27 @@
 
 static void defineNative(VM* vm, const char* name, NativeFn function);
 
-static Value clockNative(uint8_t argCount, Value* args) {
+static Value clockNative(VM* vm, uint8_t argCount, Value* args) {
 	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
-static Value printNative(uint8_t argCount, Value* args) {
+static Value printNative(VM* vm, uint8_t argCount, Value* args) {
 	for (size_t i = 0; i < argCount; i++) {
-		printValue(args[i]);
+		printf("%s", valueToString(vm, args[i])->chars);
 		printf(" ");
 	}
 	printf("\n");
 	return NULL_VAL;
+}
+
+static Value toStringNative(VM* vm, uint8_t argCount, Value* args) {
+	//TODO arg count safety
+	return OBJ_VAL(valueToString(vm, args[0]));
+}
+
+static Value reprNative(VM* vm, uint8_t argCount, Value* args) {
+	//TODO arg count safety
+	return OBJ_VAL(valueToRepr(vm, args[0]));
 }
 
 static void resetStack(VM* vm) {
@@ -37,6 +47,7 @@ void initVM(VM* vm) {
 	vm->objects = NULL;
 	vm->bytesAllocated = 0;
 	vm->nextGC = 1024 * 1024;
+	vm->shouldGC = true;
 	vm->grayCount = 0;
 	vm->grayCapacity = 0;
 	vm->grayStack = NULL;
@@ -56,6 +67,8 @@ void initVM(VM* vm) {
 
 	tableSet(vm, &vm->globals, copyString(vm, "NaN", 3), NUMBER_VAL(nan("0")));
 	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
+	defineNative(vm, "toString", toStringNative);
+	defineNative(vm, "repr", reprNative);
 	defineNative(vm, "clock", clockNative);
 	defineNative(vm, "print", printNative);
 }
@@ -191,7 +204,7 @@ static bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				return call(vm, AS_CLOSURE(callee), argCount);
 			case OBJ_NATIVE: {
 				NativeFn native = AS_NATIVE(callee);
-				Value result = native(argCount, vm->stackTop - argCount);
+				Value result = native(vm, argCount, vm->stackTop - argCount);
 				vm->stackTop -= ((size_t)argCount) + 1;
 				push(vm, result);
 				return true;
@@ -254,8 +267,8 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 }
 
 static void concatenate(VM* vm) {
-	ObjString* b = AS_STRING(peek(vm, 0));
-	ObjString* a = AS_STRING(peek(vm, 1));
+	ObjString* b = valueToString(vm, peek(vm, 0));
+	ObjString* a = valueToString(vm, peek(vm, 1));
 
 	size_t length = a->length + b->length;
 	char* chars = ALLOCATE(vm, char, length + 1);
@@ -318,12 +331,12 @@ static InterpreterResult run(VM* vm) {
 		printf("     ");
 		for (Value* slot = vm->stack; slot < vm->stackTop; slot++) {
 			printf("[ ");
-			printValue(*slot);
+			printf("%s", valueToRepr(vm, *slot)->chars);
 			printf(" ]");
 		}
 		printf("\n");
 
-		disassembleInstruction(&frame->closure->function->chunk, (int)(frame->ip - frame->closure->function->chunk.code));
+		disassembleInstruction(vm, &frame->closure->function->chunk, (int)(frame->ip - frame->closure->function->chunk.code));
 #endif
 
 		uint8_t instruction;
@@ -466,7 +479,7 @@ static InterpreterResult run(VM* vm) {
 				push(vm, NUMBER_VAL(-AS_NUMBER(pop(vm)))); 
 				break;
 			case OP_ADD: {
-				if (IS_STRING(peek(vm, 0)) && IS_STRING(peek(vm, 1))) {
+				if (IS_STRING(peek(vm, 0)) || IS_STRING(peek(vm, 1))) {
 					concatenate(vm);
 				}
 				else if (IS_NUMBER(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {

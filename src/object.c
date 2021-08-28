@@ -5,6 +5,8 @@
 #include "table.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
+#include <stdlib.h>
 
 #define ALLOCATE_OBJ(vm, type, objectType) \
 	(type*)allocateObject(vm, sizeof(type), objectType)
@@ -121,40 +123,114 @@ ObjString* copyString(VM* vm, const char* chars, size_t length) {
 	return allocateString(vm, heapChars, length, hash);
 }
 
-static void printFunction(ObjFunction* function) {
-	if (function->name == NULL) {
-		printf("<script>");
-		return;
-	}
-	printf("<function %s>", function->name->chars);
+ObjString* makeStringf(VM* vm, const char* format, ...) {
+	va_list vsnargs, vsargs;
+	va_start(vsnargs, format);
+	va_copy(vsargs, vsnargs);
+	int length = vsnprintf(NULL, 0, format, vsnargs);
+	va_end(vsnargs);
+	char* string = malloc((size_t)length + 1);
+	
+	vsprintf(string, format, vsargs);
+	va_end(vsargs);
+
+	return takeString(vm, string, length);
 }
 
-void printObject(Value value) {
+ObjString* functionToString(VM* vm, ObjFunction* function) {
+	if (function->name == NULL) {
+		return copyString(vm, "<script>", 8);
+	}
+	return makeStringf(vm, "<function %s>", function->name->chars);
+}
+
+ObjString* objectToString(VM* vm, Value value) {
 	switch (OBJ_TYPE(value)) {
 		case OBJ_BOUND_METHOD:
-			printFunction(AS_BOUND_METHOD(value)->method->function);
-			break;
+			return functionToString(vm, AS_BOUND_METHOD(value)->method->function);
 		case OBJ_CLASS:
-			printf("<class %s>", AS_CLASS(value)->name->chars);
-			break;
+			return makeStringf(vm, "<class %s>", AS_CLASS(value)->name->chars);
 		case OBJ_INSTANCE:
-			printf("<instance %s>", AS_INSTANCE(value)->klass->name->chars);
-			break;
+			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
 		case OBJ_CLOSURE:
-			printFunction(AS_CLOSURE(value)->function);
-			break;
+			return functionToString(vm, AS_CLOSURE(value)->function);
 		case OBJ_FUNCTION:
-			printFunction(AS_FUNCTION(value));
-			break;
+			return functionToString(vm, AS_FUNCTION(value));
 		case OBJ_NATIVE:
-			printf("<native function>");
-			break;
+			return copyString(vm, "<native function>", 17);
 		case OBJ_STRING:
-			printf("%s", AS_CSTRING(value));
-			break;
+			return AS_STRING(value);
 		case OBJ_UPVALUE:
-			printf("upvalue");
-			break;
+			return copyString(vm, "upvalue", 7);
+		default:
+			return NULL; // Unreachable.
+	}
+}
+
+static ObjString* unescapeString(VM* vm, ObjString* string) {
+#define EXPAND(c) \
+	{ \
+		*dest++ = '\\'; \
+		*dest++ = c; \
+		continue; \
+	}
+
+	char* chars = string->chars;
+	size_t length = string->length;
+
+	size_t count = 0;
+	for (size_t i = 0; i < length; i++) {
+		switch (chars[i]) {
+			case '\n':
+			case '\\':
+			case '\r':
+			case '\t':
+			case '\b':
+			case '\f':
+				count++;
+		}
+	}
+
+	if (count == 0) return string;
+
+	char* dest = ALLOCATE(vm, char, length + count + 1);
+	char* destStart = dest;
+
+	for (size_t i = 0; i < length; i++) {
+		switch (chars[i]) {
+			case '\n': EXPAND('n');
+			case '\\': EXPAND('\\');
+			case '\r': EXPAND('r');
+			case '\t': EXPAND('t');
+			case '\b': EXPAND('b');
+			case '\f': EXPAND('f');
+		}
+		*dest++ = chars[i];
+	}
+	*dest = '\0';
+
+	return takeString(vm, destStart, length + count);
+#undef EXPAND
+}
+
+ObjString* stringToRepr(VM* vm, ObjString* string) {
+	ObjString* unescaped = unescapeString(vm, string);
+	return makeStringf(vm, "\"%s\"", unescaped->chars);
+}
+
+ObjString* objectToRepr(VM* vm, Value value) {
+	switch (OBJ_TYPE(value)) {
+		case OBJ_BOUND_METHOD:
+		case OBJ_CLASS:
+		case OBJ_CLOSURE:
+		case OBJ_FUNCTION:
+		case OBJ_NATIVE:
+		case OBJ_UPVALUE:
+			return objectToString(vm, value);
+		case OBJ_INSTANCE:
+			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
+		case OBJ_STRING:
+			return stringToRepr(vm, AS_STRING(value));
 		default: return; // Unreachable.
 	}
 }

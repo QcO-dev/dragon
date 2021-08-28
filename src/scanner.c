@@ -81,8 +81,13 @@ static void skipWhitespace(Scanner* scanner) {
 
 static Token string(Scanner* scanner) {
 	char ending = scanner->current[-1];
-	while (peek(scanner) != ending && !isAtEnd(scanner)) {
+	bool escape = false;
+	while (!isAtEnd(scanner)) {
+		if (peek(scanner) == ending && !escape) break;
+
 		if (peek(scanner) == '\n') scanner->line++;
+		if (escape) escape = false;
+		if (peek(scanner) == '\\') escape = true;
 		advance(scanner);
 	}
 	if (isAtEnd(scanner)) return errorToken(scanner, "Unterminated string.");

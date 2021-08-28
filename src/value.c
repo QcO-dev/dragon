@@ -38,20 +38,37 @@ void printNumber(double value) {
 	}
 }
 
-void printValue(Value value) {
+ObjString* numberToString(VM* vm, double value) {
+	if (isinf(value)) {
+		return makeStringf(vm, "%sInfinity", signbit(value) ? "-" : "");
+	}
+	else if (isnan(value)) {
+		return copyString(vm, "NaN", 3);
+	}
+	return makeStringf(vm, "%g", value);
+}
+
+ObjString* valueToString(VM* vm, Value value) {
+	switch (value.type) {
+		case VAL_BOOL:
+			return AS_BOOL(value) ? copyString(vm, "true", 4) : copyString(vm, "false", 5);
+		case VAL_NULL:
+			return copyString(vm, "null", 4);
+		case VAL_NUMBER:
+			return numberToString(vm, AS_NUMBER(value));
+		case VAL_OBJ:
+			return objectToString(vm, value);
+	}
+}
+
+ObjString* valueToRepr(VM* vm, Value value) {
 	switch (value.type) {
 		case VAL_BOOL: 
-			printf(AS_BOOL(value) ? "true" : "false");
-			break;
 		case VAL_NULL:
-			printf("null");
-			break;
 		case VAL_NUMBER:
-			printNumber(AS_NUMBER(value)); 
-			break;
+			return valueToString(vm, value);
 		case VAL_OBJ:
-			printObject(value);
-			break;
+			return objectToRepr(vm, value);
 	}
 }
 

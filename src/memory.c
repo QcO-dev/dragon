@@ -23,7 +23,7 @@ void* reallocate(VM* vm, void* pointer, size_t oldSize, size_t newSize) {
 #endif
 	}
 
-	if (vm->bytesAllocated > vm->nextGC) {
+	if (vm->bytesAllocated > vm->nextGC && vm->shouldGC) {
 		collectGarbage(vm);
 	}
 
@@ -238,6 +238,7 @@ static void freeObject(VM* vm, Obj* object) {
 }
 
 void freeObjects(VM* vm) {
+	vm->shouldGC = false;
 	Obj* object = vm->objects;
 	while (object != NULL) {
 		Obj* next = object->next;
@@ -245,4 +246,5 @@ void freeObjects(VM* vm) {
 		object = next;
 	}
 	free(vm->grayStack);
+	vm->shouldGC = true;
 }

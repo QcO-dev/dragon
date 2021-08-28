@@ -2,6 +2,6 @@
 
 #include "chunk.h"
 
-void disassembleChunk(Chunk* chunk, const char* name);
-int disassembleInstruction(Chunk* chunk, int offset);
+void disassembleChunk(VM* vm, Chunk* chunk, const char* name);
+int disassembleInstruction(VM* vm, Chunk* chunk, int offset);
 size_t getLine(LineNumberTable* table, size_t index);
