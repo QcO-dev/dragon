@@ -167,40 +167,19 @@ ObjString* objectToString(VM* vm, Value value) {
 	}
 }
 
-static void printFunction(ObjFunction* function) {
-	if (function->name == NULL) {
-		printf("<script>");
-		return;
-	}
-	printf("<function %s>", function->name->chars);
-}
-
-void printObjectRepr(Value value) {
+ObjString* objectToRepr(VM* vm, Value value) {
 	switch (OBJ_TYPE(value)) {
 		case OBJ_BOUND_METHOD:
-			printFunction(AS_BOUND_METHOD(value)->method->function);
-			break;
 		case OBJ_CLASS:
-			printf("<class %s>", AS_CLASS(value)->name->chars);
-			break;
-		case OBJ_INSTANCE:
-			printf("<instance %s>", AS_INSTANCE(value)->klass->name->chars);
-			break;
 		case OBJ_CLOSURE:
-			printFunction(AS_CLOSURE(value)->function);
-			break;
 		case OBJ_FUNCTION:
-			printFunction(AS_FUNCTION(value));
-			break;
 		case OBJ_NATIVE:
-			printf("<native function>");
-			break;
-		case OBJ_STRING:
-			printf("\"%s\"", AS_CSTRING(value));
-			break;
 		case OBJ_UPVALUE:
-			printf("upvalue");
-			break;
+			return objectToString(vm, value);
+		case OBJ_INSTANCE:
+			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
+		case OBJ_STRING:
+			return makeStringf(vm, "\"%s\"", AS_CSTRING(value));
 		default: return; // Unreachable.
 	}
 }

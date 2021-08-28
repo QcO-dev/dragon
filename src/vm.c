@@ -31,6 +31,11 @@ static Value toStringNative(VM* vm, uint8_t argCount, Value* args) {
 	return OBJ_VAL(valueToString(vm, args[0]));
 }
 
+static Value reprNative(VM* vm, uint8_t argCount, Value* args) {
+	//TODO arg count safety
+	return OBJ_VAL(valueToRepr(vm, args[0]));
+}
+
 static void resetStack(VM* vm) {
 	vm->stackTop = vm->stack;
 	vm->frameCount = 0;
@@ -63,6 +68,7 @@ void initVM(VM* vm) {
 	tableSet(vm, &vm->globals, copyString(vm, "NaN", 3), NUMBER_VAL(nan("0")));
 	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
 	defineNative(vm, "toString", toStringNative);
+	defineNative(vm, "repr", reprNative);
 	defineNative(vm, "clock", clockNative);
 	defineNative(vm, "print", printNative);
 }
@@ -325,12 +331,12 @@ static InterpreterResult run(VM* vm) {
 		printf("     ");
 		for (Value* slot = vm->stack; slot < vm->stackTop; slot++) {
 			printf("[ ");
-			printValueRepr(*slot);
+			printf("%s", valueToRepr(vm, *slot)->chars);
 			printf(" ]");
 		}
 		printf("\n");
 
-		disassembleInstruction(&frame->closure->function->chunk, (int)(frame->ip - frame->closure->function->chunk.code));
+		disassembleInstruction(vm, &frame->closure->function->chunk, (int)(frame->ip - frame->closure->function->chunk.code));
 #endif
 
 		uint8_t instruction;

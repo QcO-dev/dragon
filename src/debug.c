@@ -16,11 +16,11 @@ size_t getLine(LineNumberTable* table, size_t index) {
 	return table->lines[offset - 1];
 }
 
-void disassembleChunk(Chunk* chunk, const char* name) {
+void disassembleChunk(VM* vm, Chunk* chunk, const char* name) {
 	printf("==== %s (0x%" PRIXPTR ") ====\n", name, (uintptr_t) chunk);
 
 	for (int offset = 0; offset < chunk->count;) {
-		offset = disassembleInstruction(chunk, offset);
+		offset = disassembleInstruction(vm, chunk, offset);
 	}
 }
 
@@ -29,13 +29,13 @@ static int simpleInstruction(const char* name, int offset) {
 	return offset + 1;
 }
 
-static int constantInstruction(const char* name, Chunk* chunk, int offset) {
+static int constantInstruction(const char* name, VM* vm, Chunk* chunk, int offset) {
 	size_t constant;
 	size_t size = readUleb128(&chunk->code[offset + 1], &constant);
 
-	printf("%-16s %4zu '", name, constant);
-	printValueRepr(chunk->constants.values[constant]);
-	printf("'\n");
+	printf("%-16s %4zu ", name, constant);
+	printf("%s", valueToRepr(vm, chunk->constants.values[constant])->chars);
+	printf("\n");
 	return offset + (int)size + 1;
 }
 
@@ -52,17 +52,17 @@ static int jumpInstruction(const char* name, int sign, Chunk* chunk, int offset)
 	return offset + 3;
 }
 
-static int invokeInstruction(const char* name, Chunk* chunk, int offset) {
+static int invokeInstruction(const char* name, VM* vm, Chunk* chunk, int offset) {
 	size_t constant;
 	size_t size = readUleb128(&chunk->code[offset + 1], &constant);
 	uint8_t argCount = chunk->code[offset + 2];
-	printf("%-16s (%d args) %4zu '", name, argCount, constant);
-	printValueRepr(chunk->constants.values[constant]);
-	printf("'\n");
+	printf("%-16s (%d args) %4zu ", name, argCount, constant);
+	printf("%s", valueToRepr(vm, chunk->constants.values[constant])->chars);
+	printf("\n");
 	return offset + size + 2;
 }
 
-int disassembleInstruction(Chunk* chunk, int offset) {
+int disassembleInstruction(VM* vm, Chunk* chunk, int offset) {
 	// Five spaces align with the chunks name
 	printf("     %04d ", offset);
 	printf("%4zu ", getLine(&chunk->lines, offset));
@@ -70,10 +70,10 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	uint8_t instruction = chunk->code[offset];
 
 	switch (instruction) {
-		case OP_CONSTANT: return constantInstruction("CONSTANT", chunk, offset);
-		case OP_GET_GLOBAL: return constantInstruction("GET_GLOBAL", chunk, offset);
-		case OP_DEFINE_GLOBAL: return constantInstruction("DEFINE_GLOBAL", chunk, offset);
-		case OP_SET_GLOBAL: return constantInstruction("SET_GLOBAL", chunk, offset);
+		case OP_CONSTANT: return constantInstruction("CONSTANT", vm, chunk, offset);
+		case OP_GET_GLOBAL: return constantInstruction("GET_GLOBAL", vm, chunk, offset);
+		case OP_DEFINE_GLOBAL: return constantInstruction("DEFINE_GLOBAL", vm, chunk, offset);
+		case OP_SET_GLOBAL: return constantInstruction("SET_GLOBAL", vm, chunk, offset);
 		case OP_GET_LOCAL: return byteInstruction("GET_LOCAL", chunk, offset);
 		case OP_SET_LOCAL: return byteInstruction("SET_LOCAL", chunk, offset);
 		case OP_NULL: return simpleInstruction("NULL", offset);
@@ -106,7 +106,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 			offset++;
 			uint8_t constant = chunk->code[offset++];
 			printf("%-16s %4d ", "CLOSURE", constant);
-			printValueRepr(chunk->constants.values[constant]);
+			printf("%s", valueToRepr(vm, chunk->constants.values[constant])->chars);
 			printf("\n");
 
 			ObjFunction* function = AS_FUNCTION(chunk->constants.values[constant]);
@@ -121,15 +121,15 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		case OP_GET_UPVALUE: return byteInstruction("GET_UPVALUE", chunk, offset);
 		case OP_SET_UPVALUE: return byteInstruction("SET_UPVALUE", chunk, offset);
 		case OP_CLOSE_UPVALUE: return simpleInstruction("CLOSE_UPVALUE", offset);
-		case OP_CLASS: return constantInstruction("CLASS", chunk, offset);
+		case OP_CLASS: return constantInstruction("CLASS", vm, chunk, offset);
 		case OP_INHERIT: return simpleInstruction("INHERIT", offset);
-		case OP_METHOD: return constantInstruction("METHOD", chunk, offset);
-		case OP_INVOKE: return invokeInstruction("INVOKE", chunk, offset);
-		case OP_SUPER_INVOKE: return invokeInstruction("SUPER_INVOKE", chunk, offset);
-		case OP_GET_PROPERTY: return constantInstruction("GET_PROPERTY", chunk, offset);
-		case OP_SET_PROPERTY: return constantInstruction("SET_PROPERTY", chunk, offset);
-		case OP_SET_PROPERTY_KV: return constantInstruction("SET_PROPERTY_KV", chunk, offset);
-		case OP_GET_SUPER: return constantInstruction("GET_SUPER", chunk, offset);
+		case OP_METHOD: return constantInstruction("METHOD", vm, chunk, offset);
+		case OP_INVOKE: return invokeInstruction("INVOKE", vm, chunk, offset);
+		case OP_SUPER_INVOKE: return invokeInstruction("SUPER_INVOKE", vm, chunk, offset);
+		case OP_GET_PROPERTY: return constantInstruction("GET_PROPERTY", vm, chunk, offset);
+		case OP_SET_PROPERTY: return constantInstruction("SET_PROPERTY", vm, chunk, offset);
+		case OP_SET_PROPERTY_KV: return constantInstruction("SET_PROPERTY_KV", vm, chunk, offset);
+		case OP_GET_SUPER: return constantInstruction("GET_SUPER", vm, chunk, offset);
 		case OP_RETURN: return simpleInstruction("RETURN", offset);
 		default: {
 			printf("Unknown Opcode %d\n", instruction);

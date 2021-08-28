@@ -61,20 +61,14 @@ ObjString* valueToString(VM* vm, Value value) {
 	}
 }
 
-void printValueRepr(Value value) {
+ObjString* valueToRepr(VM* vm, Value value) {
 	switch (value.type) {
 		case VAL_BOOL: 
-			printf(AS_BOOL(value) ? "true" : "false");
-			break;
 		case VAL_NULL:
-			printf("null");
-			break;
 		case VAL_NUMBER:
-			printNumber(AS_NUMBER(value)); 
-			break;
+			return valueToString(vm, value);
 		case VAL_OBJ:
-			printObjectRepr(value);
-			break;
+			return objectToRepr(vm, value);
 	}
 }
 
