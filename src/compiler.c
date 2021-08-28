@@ -443,12 +443,59 @@ static void number(Compiler* compiler, bool canAssign) {
 	emitConstant(compiler, NUMBER_VAL(value));
 }
 
+static void replaceEscapes(char* dest, char* source, size_t sourceLength) {
+	for (size_t i = 0; i < sourceLength; i++) {
+		if (source[i] == '\\') {
+			i++;
+			switch (source[i]) {
+				case 'n':
+					*dest++ = '\n';
+					continue;
+				case '\\':
+					*dest++ = '\\';
+					continue;
+				case 'r':
+					*dest++ = '\r';
+					continue;
+				case 't':
+					*dest++ = '\t';
+					continue;
+				case 'b':
+					*dest++ = '\b';
+					continue;
+				case 'f':
+					*dest++ = '\f';
+					continue;
+				case '\'':
+					*dest++ = '\'';
+					continue;
+				case '\"':
+					*dest++ = '\"';
+					continue;
+			}
+		}
+		*dest++ = source[i];
+	}
+	*dest = '\0';
+}
+
 static void string(Compiler* compiler, bool canAssign) {
 	Parser* parser = compiler->parser;
-	Value string = OBJ_VAL(copyString(compiler->vm, parser->previous.start + 1, parser->previous.length - 2));
-	push(compiler->vm, string);
-	emitConstant(compiler, string);
-	pop(compiler->vm);
+	char* start = parser->previous.start + 1;
+	size_t length = parser->previous.length - 2;
+	
+	char* dest = ALLOCATE(compiler->vm, char, length + 1);
+	replaceEscapes(dest, start, length);
+	size_t newLength = strlen(dest);
+
+	// No escapes
+	if (newLength == length) {
+		emitConstant(compiler, OBJ_VAL(takeString(compiler->vm, dest, length)));
+	}
+	else {
+		dest = GROW_ARRAY(compiler->vm, char, dest, length, newLength + 1);
+		emitConstant(compiler, OBJ_VAL(takeString(compiler->vm, dest, newLength)));
+	}
 }
 
 static void literal(Compiler* compiler, bool canAssign) {
