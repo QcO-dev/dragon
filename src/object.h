@@ -30,11 +30,12 @@ struct ObjFunction {
 	ObjString* name;
 };
 
-typedef Value(*NativeFn)(VM* vm, uint8_t argCount, Value* args);
+typedef Value(*NativeFn)(VM* vm, uint8_t argCount, Value* args, bool* hasError);
 
 typedef struct {
 	Obj obj;
 	NativeFn function;
+	size_t arity;
 } ObjNative;
 
 struct ObjUpvalue {
@@ -80,13 +81,13 @@ ObjBoundMethod* newBoundMethod(VM* vm, Value receiver, ObjClosure* method);
 ObjClass* newClass(VM* vm, ObjString* name);
 ObjInstance* newInstance(VM* vm, ObjClass* klass);
 ObjFunction* newFunction(VM* vm);
-ObjNative* newNative(VM* vm, NativeFn function);
+ObjNative* newNative(VM* vm, size_t arity, NativeFn function);
 ObjClosure* newClosure(VM* vm, ObjFunction* function);
 ObjUpvalue* newUpvalue(VM* vm, Value* slot);
 ObjString* takeString(VM* vm, char* chars, size_t length);
 ObjString* copyString(VM* vm, const char* chars, size_t length);
 ObjString* makeStringf(VM* vm, const char* format, ...);
-ObjString* objectToString(VM* vm, Value value);
+ObjString* objectToString(VM* vm, Value value, bool* hasError);
 ObjString* objectToRepr(VM* vm, Value value);
 
 static inline bool isObjType(Value value, ObjType type) {
@@ -108,6 +109,7 @@ static inline bool isObjType(Value value, ObjType type) {
 #define AS_CLOSURE(value) ((ObjClosure*)AS_OBJ(value))
 #define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
 #define AS_INSTANCE(value) ((ObjInstance*)AS_OBJ(value))
-#define AS_NATIVE(value) (((ObjNative*)AS_OBJ(value))->function)
+#define AS_NATIVE(value) ((ObjNative*)AS_OBJ(value))
+#define AS_NATIVE_FN(value) (((ObjNative*)AS_OBJ(value))->function)
 #define AS_STRING(value) ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString*)AS_OBJ(value))->chars)

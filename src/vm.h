@@ -35,6 +35,7 @@ struct VM {
 
 typedef enum {
 	INTERPRETER_OK,
+	INTERPRETER_CONTINUE,
 	INTERPRETER_COMPILER_ERR,
 	INTERPRETER_RUNTIME_ERR
 } InterpreterResult;
@@ -42,5 +43,8 @@ typedef enum {
 void initVM(VM* vm);
 void freeVM(VM* vm);
 InterpreterResult interpret(VM* vm, const char* source);
+void runtimeError(VM* vm, const char* format, ...);
+bool callValue(VM* vm, Value callee, uint8_t argCount);
+Value runFunction(VM* vm, bool* hasError);
 void push(VM* vm, Value value);
 Value pop(VM* vm);

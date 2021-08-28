@@ -2,6 +2,7 @@
 #include "memory.h"
 #include "value.h"
 #include "vm.h"
+#include "natives.h"
 #include "table.h"
 #include <stdio.h>
 #include <string.h>
@@ -55,9 +56,10 @@ ObjFunction* newFunction(VM* vm) {
 	return function;
 }
 
-ObjNative* newNative(VM* vm, NativeFn function) {
+ObjNative* newNative(VM* vm, size_t arity, NativeFn function) {
 	ObjNative* native = ALLOCATE_OBJ(vm, ObjNative, OBJ_NATIVE);
 	native->function = function;
+	native->arity = arity;
 	return native;
 }
 
@@ -144,14 +146,38 @@ ObjString* functionToString(VM* vm, ObjFunction* function) {
 	return makeStringf(vm, "<function %s>", function->name->chars);
 }
 
-ObjString* objectToString(VM* vm, Value value) {
+ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError) {
+	Value method;
+	if (tableGet(&instance->fields, copyString(vm, "toString", 8), &method)) {
+		Value stringForm = callDragonFromNative(vm, method, 0, hasError);
+		if (!IS_STRING(stringForm)) { 
+			runtimeError(vm, "Instance's 'toString' method must return a string.");
+			*hasError = true;
+			return NULL;
+		}
+		return AS_STRING(stringForm);
+	}
+	else if (tableGet(&instance->klass->methods, copyString(vm, "toString", 8), &method)) {
+		Value stringForm = callDragonFromNative(vm, method, 0, hasError);
+		if (!IS_STRING(stringForm)) {
+			runtimeError(vm, "Instance's 'toString' method must return a string.");
+			*hasError = true;
+			return NULL;
+		}
+		return AS_STRING(stringForm);
+	}
+
+	return makeStringf(vm, "<instance %s>", instance->klass->name->chars);
+}
+
+ObjString* objectToString(VM* vm, Value value, bool* hasError) {
 	switch (OBJ_TYPE(value)) {
 		case OBJ_BOUND_METHOD:
 			return functionToString(vm, AS_BOUND_METHOD(value)->method->function);
 		case OBJ_CLASS:
 			return makeStringf(vm, "<class %s>", AS_CLASS(value)->name->chars);
 		case OBJ_INSTANCE:
-			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
+			return instanceToString(vm, AS_INSTANCE(value), hasError);
 		case OBJ_CLOSURE:
 			return functionToString(vm, AS_CLOSURE(value)->function);
 		case OBJ_FUNCTION:
@@ -226,7 +252,8 @@ ObjString* objectToRepr(VM* vm, Value value) {
 		case OBJ_FUNCTION:
 		case OBJ_NATIVE:
 		case OBJ_UPVALUE:
-			return objectToString(vm, value);
+			// The above types cannot fail.
+			return objectToString(vm, value, NULL);
 		case OBJ_INSTANCE:
 			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
 		case OBJ_STRING:
