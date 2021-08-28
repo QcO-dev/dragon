@@ -123,6 +123,11 @@ static void blackenObject(VM* vm, Obj* object) {
 			}
 			break;
 		}
+		case OBJ_LIST: {
+			ObjList* list = (ObjList*)object;
+			markArray(vm, &list->items);
+			break;
+		}
 		case OBJ_FUNCTION: {
 			ObjFunction* function = (ObjFunction*)object;
 			markObject(vm, (Obj*)function->name);
@@ -217,6 +222,12 @@ static void freeObject(VM* vm, Obj* object) {
 		}
 		case OBJ_UPVALUE: {
 			FREE(vm, ObjUpvalue, object);
+			break;
+		}
+		case OBJ_LIST: {
+			ObjList* list = (ObjList*)object;
+			freeValueArray(vm, &list->items);
+			FREE(vm, ObjList, object);
 			break;
 		}
 		case OBJ_FUNCTION: {

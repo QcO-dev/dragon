@@ -62,6 +62,11 @@ Value pop(VM* vm) {
 	return *vm->stackTop;
 }
 
+Value popN(VM* vm, size_t count) {
+	vm->stackTop -= count;
+	return *vm->stackTop;
+}
+
 static Value peek(VM* vm, size_t distance) {
 	return vm->stackTop[-1 - distance];
 }
@@ -335,6 +340,21 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		case OP_TRUE: push(vm, BOOL_VAL(true)); break;
 		case OP_FALSE: push(vm, BOOL_VAL(false)); break;
 		case OP_OBJECT: push(vm, OBJ_VAL(vm->objectClass)); break;
+
+		case OP_LIST: {
+			uint8_t itemCount = READ_BYTE();
+
+			ValueArray items;
+			initValueArray(&items);
+
+			for (size_t i = 0; i < itemCount; i++) {
+				writeValueArray(vm, &items, peek(vm, itemCount - i - 1));
+			}
+			ObjList* list = newList(vm, items);
+			popN(vm, itemCount);
+			push(vm, OBJ_VAL(list));
+			break;
+		}
 
 		case OP_GET_GLOBAL: {
 			ObjString* name = READ_STRING();

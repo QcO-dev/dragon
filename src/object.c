@@ -40,6 +40,12 @@ ObjClass* newClass(VM* vm, ObjString* name) {
 	return klass;
 }
 
+ObjList* newList(VM* vm, ValueArray array) {
+	ObjList* list = ALLOCATE_OBJ(vm, ObjList, OBJ_LIST);
+	list->items = array;
+	return list;
+}
+
 ObjInstance* newInstance(VM* vm, ObjClass* klass) {
 	ObjInstance* instance = ALLOCATE_OBJ(vm, ObjInstance, OBJ_INSTANCE);
 	instance->klass = klass;
@@ -146,6 +152,52 @@ ObjString* functionToString(VM* vm, ObjFunction* function) {
 	return makeStringf(vm, "<function %s>", function->name->chars);
 }
 
+ObjString* listToString(VM* vm, ObjList* list, bool* hasError, bool repr) {
+	size_t stringLength = 1; // [
+
+	for (size_t i = 0; i < list->items.count; i++) {
+		if (repr) {
+			stringLength += valueToRepr(vm, list->items.values[i])->length;
+		}
+		else {
+			Value v = list->items.values[i];
+			if(IS_STRING(v)) stringLength += valueToRepr(vm, v)->length;
+			else stringLength += valueToString(vm, v, hasError)->length;
+		}
+		if (i != list->items.count - 1) stringLength += 2;
+	}
+
+	stringLength++; // ]
+
+	char* buffer = ALLOCATE(vm, char, stringLength + 1);
+
+	buffer[0] = '[';
+
+	size_t bufferIndex = 1;
+
+	for (size_t i = 0; i < list->items.count; i++) {
+		ObjString* str;
+		if (repr) {
+			str = valueToRepr(vm, list->items.values[i]);
+		}
+		else {
+			Value v = list->items.values[i];
+			if (IS_STRING(v)) str = valueToRepr(vm, v);
+			else str = valueToString(vm, v, hasError);
+		}
+		memcpy(&buffer[bufferIndex], str->chars, str->length);
+		bufferIndex += str->length;
+		if (i != list->items.count - 1) {
+			memcpy(&buffer[bufferIndex], ", ", 2);
+			bufferIndex += 2;
+		}
+	}
+	buffer[stringLength - 1] = ']';
+	buffer[stringLength] = '\0';
+
+	return takeString(vm, buffer, stringLength);
+}
+
 ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError) {
 	Value method;
 	if (tableGet(&instance->fields, copyString(vm, "toString", 8), &method)) {
@@ -180,6 +232,8 @@ ObjString* objectToString(VM* vm, Value value, bool* hasError) {
 			return instanceToString(vm, AS_INSTANCE(value), hasError);
 		case OBJ_CLOSURE:
 			return functionToString(vm, AS_CLOSURE(value)->function);
+		case OBJ_LIST:
+			return listToString(vm, AS_LIST(value), hasError, false);
 		case OBJ_FUNCTION:
 			return functionToString(vm, AS_FUNCTION(value));
 		case OBJ_NATIVE:
@@ -254,6 +308,8 @@ ObjString* objectToRepr(VM* vm, Value value) {
 		case OBJ_UPVALUE:
 			// The above types cannot fail.
 			return objectToString(vm, value, NULL);
+		case OBJ_LIST:
+			return listToString(vm, AS_LIST(value), NULL, true);
 		case OBJ_INSTANCE:
 			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
 		case OBJ_STRING:
