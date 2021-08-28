@@ -1,5 +1,6 @@
 #include "natives.h"
 #include "value.h"
+#include <stdio.h>
 #include <time.h>
 #include <math.h>
 
@@ -9,7 +10,9 @@ static Value clockNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) 
 
 static Value printNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
 	for (size_t i = 0; i < argCount; i++) {
-		printf("%s", valueToString(vm, args[i])->chars);
+		ObjString* value = valueToString(vm, args[i], hasError);
+		if (*hasError) return NULL_VAL;
+		printf("%s", value->chars);
 		printf(" ");
 	}
 	printf("\n");
@@ -17,7 +20,7 @@ static Value printNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) 
 }
 
 static Value toStringNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
-	return OBJ_VAL(valueToString(vm, args[0]));
+	return OBJ_VAL(valueToString(vm, args[0], hasError));
 }
 
 static Value reprNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {

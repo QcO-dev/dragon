@@ -87,7 +87,7 @@ ObjUpvalue* newUpvalue(VM* vm, Value* slot);
 ObjString* takeString(VM* vm, char* chars, size_t length);
 ObjString* copyString(VM* vm, const char* chars, size_t length);
 ObjString* makeStringf(VM* vm, const char* format, ...);
-ObjString* objectToString(VM* vm, Value value);
+ObjString* objectToString(VM* vm, Value value, bool* hasError);
 ObjString* objectToRepr(VM* vm, Value value);
 
 static inline bool isObjType(Value value, ObjType type) {

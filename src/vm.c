@@ -239,9 +239,10 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 	return invokeFromClass(vm, instance->klass, name, argCount);
 }
 
-static void concatenate(VM* vm) {
+static bool concatenate(VM* vm) {
 	ObjString* b;
 	ObjString* a;
+	bool hasError;
 	// Swaps stack so that .toString() implicit call functions (calling convention)
 	if (IS_INSTANCE(peek(vm, 1))) {
 		Value valB = pop(vm);
@@ -249,14 +250,19 @@ static void concatenate(VM* vm) {
 		push(vm, valB);
 		push(vm, valA);
 
-		b = valueToString(vm, peek(vm, 1));
-		a = valueToString(vm, peek(vm, 0));
+		b = valueToString(vm, peek(vm, 1), &hasError);
+		a = valueToString(vm, peek(vm, 0), &hasError);
 	}
 	else {
-		b = valueToString(vm, peek(vm, 0));
-		a = valueToString(vm, peek(vm, 1));
+		b = valueToString(vm, peek(vm, 0), &hasError);
+		a = valueToString(vm, peek(vm, 1), &hasError);
 	}
 	
+	if (hasError) { 
+		pop(vm);
+		pop(vm);
+		return false; 
+	}
 
 	size_t length = a->length + b->length;
 	char* chars = ALLOCATE(vm, char, length + 1);
@@ -268,6 +274,7 @@ static void concatenate(VM* vm) {
 	pop(vm);
 	pop(vm);
 	push(vm, OBJ_VAL(result));
+	return true;
 }
 
 static inline Value getConstant(CallFrame* frame) {
@@ -456,7 +463,9 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			break;
 		case OP_ADD: {
 			if (IS_STRING(peek(vm, 0)) || IS_STRING(peek(vm, 1))) {
-				concatenate(vm);
+				if (!concatenate(vm)) {
+					return INTERPRETER_RUNTIME_ERR;
+				}
 			}
 			else if (IS_NUMBER(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
 				double b = AS_NUMBER(pop(vm));
