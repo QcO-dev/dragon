@@ -261,8 +261,8 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 }
 
 static void concatenate(VM* vm) {
-	ObjString* b = AS_STRING(peek(vm, 0));
-	ObjString* a = AS_STRING(peek(vm, 1));
+	ObjString* b = valueToString(vm, peek(vm, 0));
+	ObjString* a = valueToString(vm, peek(vm, 1));
 
 	size_t length = a->length + b->length;
 	char* chars = ALLOCATE(vm, char, length + 1);
@@ -473,7 +473,7 @@ static InterpreterResult run(VM* vm) {
 				push(vm, NUMBER_VAL(-AS_NUMBER(pop(vm)))); 
 				break;
 			case OP_ADD: {
-				if (IS_STRING(peek(vm, 0)) && IS_STRING(peek(vm, 1))) {
+				if (IS_STRING(peek(vm, 0)) || IS_STRING(peek(vm, 1))) {
 					concatenate(vm);
 				}
 				else if (IS_NUMBER(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
