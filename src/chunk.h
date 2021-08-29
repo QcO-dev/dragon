@@ -41,6 +41,7 @@ typedef enum {
 	OP_IS,
 	OP_GREATER,
 	OP_LESS,
+	OP_IN,
 	OP_JUMP_IF_FALSE,
 	OP_JUMP_IF_FALSE_SC,
 	OP_JUMP,
