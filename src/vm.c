@@ -679,6 +679,55 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		case OP_GREATER: BINARY_OP(BOOL_VAL, > ); break;
 		case OP_LESS: BINARY_OP(BOOL_VAL, < ); break;
 
+		case OP_IN: {
+			Value b = pop(vm);
+			Value a = pop(vm);
+
+			if (IS_LIST(b)) {
+				ObjList* list = AS_LIST(b);
+
+				for (size_t i = 0; i < list->items.count; i++) {
+					if (valuesEqual(list->items.values[i], a)) {
+						push(vm, BOOL_VAL(true));
+						goto exit;
+					}
+				}
+				push(vm, BOOL_VAL(false));
+				exit:
+				break;
+			}
+			else if (IS_INSTANCE(b)) {
+				ObjInstance* instance = AS_INSTANCE(b);
+
+				if (!IS_STRING(a)) {
+					runtimeError(vm, "Field name must be a string.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				ObjString* key = AS_STRING(a);
+
+				Value v;
+				push(vm, BOOL_VAL(tableGet(&instance->fields, key, &v)));
+				break;
+			}
+			else if(IS_STRING(b)) {
+				ObjString* string = AS_STRING(b);
+
+				if (!IS_STRING(a)) {
+					runtimeError(vm, "Substring must be a string.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				ObjString* substring = AS_STRING(a);
+
+				push(vm, BOOL_VAL(strstr(string->chars, substring->chars) != NULL));
+				break;
+			}
+
+			runtimeError(vm, "Can only use 'in' on strings, lists and instances");
+			return INTERPRETER_RUNTIME_ERR;
+		}
+
 		case OP_JUMP_IF_FALSE: {
 			uint16_t offset = READ_SHORT();
 			if (isFalsey(pop(vm))) frame->ip += offset;

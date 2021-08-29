@@ -80,7 +80,7 @@ int disassembleInstruction(VM* vm, Chunk* chunk, int offset) {
 		case OP_TRUE: return simpleInstruction("TRUE", offset);
 		case OP_FALSE: return simpleInstruction("FALSE", offset);
 		case OP_OBJECT: return simpleInstruction("OBJECT", offset);
-		case OP_LIST: return simpleInstruction("LIST", offset);
+		case OP_LIST: return byteInstruction("LIST", chunk, offset);
 		case OP_POP: return simpleInstruction("POP", offset);
 		case OP_NOT: return simpleInstruction("NOT", offset);
 		case OP_NEGATE: return simpleInstruction("NEGATE", offset);
@@ -99,6 +99,7 @@ int disassembleInstruction(VM* vm, Chunk* chunk, int offset) {
 		case OP_IS: return simpleInstruction("IS", offset);
 		case OP_GREATER: return simpleInstruction("GREATER", offset);
 		case OP_LESS: return simpleInstruction("LESS", offset);
+		case OP_IN: return simpleInstruction("IN", offset);
 		case OP_JUMP: return jumpInstruction("JUMP", 1, chunk, offset);
 		case OP_LOOP: return jumpInstruction("LOOP", -1, chunk, offset);
 		case OP_JUMP_IF_FALSE: return jumpInstruction("JUMP_IF_FALSE", 1, chunk, offset);

@@ -143,6 +143,7 @@ static TokenType identifierType(Scanner* scanner) {
 				switch (scanner->start[1]) {
 					case 'f': return checkKeyword(scanner, 2, 0, "", TOKEN_IF);
 					case 's': return checkKeyword(scanner, 2, 0, "", TOKEN_IS);
+					case 'n': return checkKeyword(scanner, 2, 0, "", TOKEN_IN);
 				}
 			}
 			break;
