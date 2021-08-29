@@ -203,7 +203,7 @@ ObjString* listToString(VM* vm, ObjList* list, bool* hasError, bool repr) {
 ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError) {
 	Value method;
 	if (tableGet(&instance->fields, copyString(vm, "toString", 8), &method)) {
-		Value stringForm = callDragonFromNative(vm, NULL, method, 0, hasError);
+		Value stringForm = callDragonFromNative(vm, &OBJ_VAL(instance), method, 0, hasError);
 		if (!IS_STRING(stringForm)) { 
 			runtimeError(vm, "Instance's 'toString' method must return a string.");
 			*hasError = true;
@@ -212,7 +212,7 @@ ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError) {
 		return AS_STRING(stringForm);
 	}
 	else if (tableGet(&instance->klass->methods, copyString(vm, "toString", 8), &method)) {
-		Value stringForm = callDragonFromNative(vm, NULL, method, 0, hasError);
+		Value stringForm = callDragonFromNative(vm, &OBJ_VAL(instance), method, 0, hasError);
 		if (!IS_STRING(stringForm)) {
 			runtimeError(vm, "Instance's 'toString' method must return a string.");
 			*hasError = true;
@@ -354,7 +354,115 @@ static Value valuesNative(VM* vm, Value* bound, uint8_t argCount, Value* args, b
 	return OBJ_VAL(list);
 }
 
+static Value entriesNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+	ValueArray array;
+	initValueArray(&array);
+
+	ObjInstance* instance = AS_INSTANCE(*bound);
+
+	size_t count = 0;
+	for (size_t i = 0; i < instance->fields.capacity; i++) {
+		Entry* entry = &instance->fields.entries[i];
+		if (entry->key != NULL) {
+			ValueArray entryArray;
+			initValueArray(&entryArray);
+			writeValueArray(vm, &entryArray, OBJ_VAL(entry->key));
+			writeValueArray(vm, &entryArray, entry->value);
+
+			ObjList* list = newList(vm, entryArray);
+			Value entryValue = OBJ_VAL(list);
+			writeValueArray(vm, &array, entryValue);
+			push(vm, entryValue); // Avoid GC
+			count++;
+		}
+	}
+
+	ObjList* entries = newList(vm, array);
+	popN(vm, count);
+	return OBJ_VAL(entries);
+}
+
+static Value hasPropertyNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+	ObjInstance* instance = AS_INSTANCE(*bound);
+
+	Value propertyValue = args[0];
+
+	if (!IS_STRING(propertyValue)) {
+		runtimeError(vm, "Property name must be a string.");
+		*hasError = true;
+		return NULL_VAL;
+	}
+
+	ObjString* propertyName = AS_STRING(propertyValue);
+
+	Value _;
+	return BOOL_VAL(tableGet(&instance->fields, propertyName, &_));
+}
+
+static Value toStringNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+	ObjInstance* instance = AS_INSTANCE(*bound);
+
+	ObjList* list = AS_LIST(entriesNative(vm, bound, 0, NULL, hasError));
+
+	push(vm, OBJ_VAL(list)); // GC
+
+	size_t length = instance->klass->name->length + 3 /* { */;
+
+	for (size_t i = 0; i < list->items.count; i++) {
+		ObjList* entry = AS_LIST(list->items.values[i]);
+
+		ObjString* key = AS_STRING(entry->items.values[0]);
+		Value value = entry->items.values[1];
+
+		length += key->length;
+		length += 2; /*: */
+		ObjString* valueString = valueToRepr(vm, value);
+		length += valueString->length;
+
+		if (i != list->items.count - 1) length += 2; /*, */
+	}
+	length += 2; /* }*/
+	
+	char* str = ALLOCATE(vm, char, length + 1);
+
+	size_t index = 0;
+
+	memcpy(str, instance->klass->name->chars, instance->klass->name->length);
+	index += instance->klass->name->length;
+
+	memcpy(&str[index], " { ", 3);
+	index += 3;
+
+	for (size_t i = 0; i < list->items.count; i++) {
+		ObjList* entry = AS_LIST(list->items.values[i]);
+
+		ObjString* key = AS_STRING(entry->items.values[0]);
+		Value value = entry->items.values[1];
+
+		memcpy(&str[index], key->chars, key->length);
+		index += key->length;
+		memcpy(&str[index], ": ", 2);
+		index += 2; /*: */
+		ObjString* valueString = valueToRepr(vm, value);
+		memcpy(&str[index], valueString->chars, valueString->length);
+		index += valueString->length;
+
+		if (i != list->items.count - 1) {
+			memcpy(&str[index], ", ", 2);
+			index += 2; /*, */
+		}
+	}
+	memcpy(&str[index], " }", 2);
+	str[length] = '\0';
+
+	pop(vm);
+	return OBJ_VAL(takeString(vm, str, length));
+}
+
 void defineObjectNatives(VM* vm) {
 	defineNative(vm, &vm->objectClass->methods, "keys", 0, keysNative);
 	defineNative(vm, &vm->objectClass->methods, "values", 0, valuesNative);
+	defineNative(vm, &vm->objectClass->methods, "entries", 0, entriesNative);
+	defineNative(vm, &vm->objectClass->methods, "hasProperty", 1, hasPropertyNative);
+	defineNative(vm, &vm->objectClass->methods, "toString", 0, toStringNative);
 }
