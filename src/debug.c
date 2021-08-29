@@ -130,6 +130,8 @@ int disassembleInstruction(VM* vm, Chunk* chunk, int offset) {
 		case OP_GET_PROPERTY: return constantInstruction("GET_PROPERTY", vm, chunk, offset);
 		case OP_SET_PROPERTY: return constantInstruction("SET_PROPERTY", vm, chunk, offset);
 		case OP_SET_PROPERTY_KV: return constantInstruction("SET_PROPERTY_KV", vm, chunk, offset);
+		case OP_GET_INDEX: return simpleInstruction("GET_INDEX", offset);
+		case OP_SET_INDEX: return simpleInstruction("SET_INDEX", offset);
 		case OP_GET_SUPER: return constantInstruction("GET_SUPER", vm, chunk, offset);
 		case OP_RETURN: return simpleInstruction("RETURN", offset);
 		default: {

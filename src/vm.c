@@ -292,6 +292,32 @@ static inline bool isInteger(double value) {
 	return floor(value) == value;
 }
 
+static bool validateListIndex(VM* vm, ObjList* list, Value indexVal, uintmax_t* dest) {
+	if (!IS_NUMBER(indexVal)) {
+		runtimeError(vm, "List index must be a number.");
+		return false;
+	}
+	double indexNum = AS_NUMBER(indexVal);
+	if (!isInteger(indexNum)) {
+		runtimeError(vm, "List index must be an integer.");
+		return false;
+	}
+	intmax_t indexSigned = (intmax_t)indexNum;
+	size_t listLength = list->items.count;
+	uintmax_t index = indexSigned;
+
+	if (indexSigned < 0) {
+		index = listLength - (-indexSigned);
+	}
+
+	if (index >= listLength) {
+		runtimeError(vm, "Index %d is out of bounds for list of length %d.", indexSigned, listLength);
+		return false;
+	}
+	*dest = index;
+	return true;
+}
+
 static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 	CallFrame* frame = &vm->frames[vm->frameCount - 1];
 	size_t baseFrameCount = vm->frameCount - 1;
@@ -456,6 +482,42 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			tableSet(vm, &instance->fields, READ_STRING(), peek(vm, 0));
 			pop(vm);
 			break;
+		}
+
+		case OP_GET_INDEX: {
+			if (IS_LIST(peek(vm, 1))) {
+				Value indexVal = pop(vm);
+				ObjList* list = AS_LIST(pop(vm));
+
+				uintmax_t index;
+				if (!validateListIndex(vm, list, indexVal, &index)) {
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				push(vm, list->items.values[index]);
+				break;
+			}
+			runtimeError(vm, "Can only index into lists.");
+			return INTERPRETER_RUNTIME_ERR;
+		}
+
+		case OP_SET_INDEX: {
+			if (IS_LIST(peek(vm, 2))) {
+				Value value = pop(vm);
+				Value indexVal = pop(vm);
+				ObjList* list = AS_LIST(pop(vm));
+
+				uintmax_t index;
+				if (!validateListIndex(vm, list, indexVal, &index)) {
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				list->items.values[index] = value;
+				push(vm, value);
+				break;
+			}
+			runtimeError(vm, "Can only index into lists.");
+			return INTERPRETER_RUNTIME_ERR;
 		}
 
 		case OP_GET_SUPER: {

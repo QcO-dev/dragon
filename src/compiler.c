@@ -70,7 +70,7 @@ typedef enum {
 	PREC_TERM,  // + -
 	PREC_FACTOR,  // * /
 	PREC_UNARY, // ! - ~
-	PREC_CALL,  // . ()
+	PREC_CALL,  // . () {} []
 	PREC_PRIMARY
 } Precedence;
 
@@ -665,6 +665,20 @@ static void dot(Compiler* compiler, bool canAssign) {
 	}
 }
 
+static void index(Compiler* compiler, bool canAssign) {
+	expression(compiler);
+
+	consume(compiler, TOKEN_RIGHT_SQBR, "Expected ']' after index");
+
+	if (canAssign && match(compiler, TOKEN_EQUAL)) {
+		expression(compiler);
+		emitByte(compiler, OP_SET_INDEX);
+	}
+	else {
+		emitByte(compiler, OP_GET_INDEX);
+	}
+}
+
 static void grouping(Compiler* compiler, bool canAssign) {
 	expression(compiler);
 	consume(compiler, TOKEN_RIGHT_PAREN, "Expected '(' after expression.");
@@ -990,7 +1004,7 @@ ParseRule rules[] = {
   [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
   [TOKEN_LEFT_BRACE] = {objectCreation, object, PREC_CALL},
   [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
-  [TOKEN_LEFT_SQBR] = {list, NULL, PREC_NONE},
+  [TOKEN_LEFT_SQBR] = {list, index, PREC_CALL},
   [TOKEN_RIGHT_SQBR] = {NULL, NULL, PREC_NONE},
   [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
   [TOKEN_DOT] = {NULL, dot, PREC_CALL},
