@@ -49,3 +49,4 @@ bool callValue(VM* vm, Value callee, uint8_t argCount);
 Value runFunction(VM* vm, bool* hasError);
 void push(VM* vm, Value value);
 Value pop(VM* vm);
+Value popN(VM* vm, size_t count);

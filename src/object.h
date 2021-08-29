@@ -31,12 +31,14 @@ struct ObjFunction {
 	ObjString* name;
 };
 
-typedef Value(*NativeFn)(VM* vm, uint8_t argCount, Value* args, bool* hasError);
+typedef Value(*NativeFn)(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError);
 
 typedef struct {
 	Obj obj;
 	NativeFn function;
 	size_t arity;
+	bool isBound;
+	Value bound;
 } ObjNative;
 
 struct ObjUpvalue {
@@ -96,6 +98,7 @@ ObjString* copyString(VM* vm, const char* chars, size_t length);
 ObjString* makeStringf(VM* vm, const char* format, ...);
 ObjString* objectToString(VM* vm, Value value, bool* hasError);
 ObjString* objectToRepr(VM* vm, Value value);
+void defineObjectNatives(VM* vm);
 
 static inline bool isObjType(Value value, ObjType type) {
 	return IS_OBJ(value) && AS_OBJ(value)->type == type;

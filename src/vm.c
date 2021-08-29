@@ -54,6 +54,7 @@ void initVM(VM* vm) {
 	tableSet(vm, &vm->globals, copyString(vm, "NaN", 3), NUMBER_VAL(nan("0")));
 	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
 	defineGlobalNatives(vm);
+	defineObjectNatives(vm);
 }
 
 void freeVM(VM* vm) {
@@ -231,7 +232,7 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				NativeFn nativeFunction = native->function;
 				bool hasError = false;
 
-				Value result = nativeFunction(vm, argCount, vm->stackTop - argCount, &hasError);
+				Value result = nativeFunction(vm, native->isBound ? &native->bound : NULL, argCount, vm->stackTop - argCount, &hasError);
 				vm->stackTop -= ((size_t)argCount) + 1;
 				push(vm, result);
 				return !hasError;
@@ -251,26 +252,43 @@ static void defineMethod(VM* vm, ObjString* name) {
 	pop(vm);
 }
 
-static bool bindMethod(VM* vm, ObjClass* klass, ObjString* name) {
+static bool bindMethod(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString* name) {
 	Value method;
 	if (!tableGet(&klass->methods, name, &method)) {
 		runtimeError(vm, "Undefined property '%s'.", name->chars);
 		return false;
 	}
-
-	ObjBoundMethod* bound = newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
+	
+	Obj* bound = NULL;
+	if (IS_NATIVE(method)) {
+		ObjNative* native = AS_NATIVE(method);
+		native->isBound = true;
+		native->bound = OBJ_VAL(instance);
+		bound = native;
+	}
+	else {
+		bound = newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
+	}
 
 	pop(vm);
 	push(vm, OBJ_VAL(bound));
 	return true;
 }
 
-static bool invokeFromClass(VM* vm, ObjClass* klass, ObjString* name, uint8_t argCount) {
+static bool invokeFromClass(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString* name, uint8_t argCount) {
 	Value method;
 	if (!tableGet(&klass->methods, name, &method)) {
 		runtimeError(vm, "Undefined property '%s'.", name->chars);
 		return false;
 	}
+
+	if (IS_NATIVE(method)) {
+		ObjNative* native = AS_NATIVE(method);
+		native->isBound = true;
+		native->bound = OBJ_VAL(instance);
+		return callValue(vm, OBJ_VAL(native), argCount);
+	}
+
 	return call(vm, AS_CLOSURE(method), argCount);
 }
 
@@ -287,10 +305,11 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 	Value value;
 	if (tableGet(&instance->fields, name, &value)) {
 		vm->stackTop[-argCount - 1] = value;
+		// TODO HERE
 		return callValue(vm, value, argCount);
 	}
 
-	return invokeFromClass(vm, instance->klass, name, argCount);
+	return invokeFromClass(vm, instance, instance->klass, name, argCount);
 }
 
 static bool concatenate(VM* vm) {
@@ -503,7 +522,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, value);
 				break;
 			}
-			if (!bindMethod(vm, instance->klass, name)) {
+			if (!bindMethod(vm, instance, instance->klass, name)) {
 				return INTERPRETER_RUNTIME_ERR;
 			}
 			break;
@@ -610,7 +629,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			ObjString* name = READ_STRING();
 			ObjClass* superclass = AS_CLASS(pop(vm));
 
-			if (!bindMethod(vm, superclass, name)) {
+			if (!bindMethod(vm, AS_INSTANCE(frame->slots[0]), superclass, name)) {
 				return INTERPRETER_RUNTIME_ERR;
 			}
 			break;
@@ -859,7 +878,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			ObjString* method = READ_STRING();
 			uint8_t argCount = READ_BYTE();
 			ObjClass* superclass = AS_CLASS(pop(vm));
-			if (!invokeFromClass(vm, superclass, method, argCount)) {
+			if (!invokeFromClass(vm, AS_INSTANCE(frame->slots[0]), superclass, method, argCount)) {
 				return INTERPRETER_RUNTIME_ERR;
 			}
 			break;
