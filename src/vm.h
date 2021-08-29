@@ -4,8 +4,7 @@
 #include "table.h"
 #include "compiler.h"
 
-#define FRAMES_MAX 64
-#define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
+#define FRAMES_MAX 1024
 
 typedef struct {
 	ObjClosure* closure;
@@ -14,9 +13,11 @@ typedef struct {
 } CallFrame;
 
 struct VM {
-	CallFrame frames[FRAMES_MAX];
+	CallFrame* frames;
 	size_t frameCount;
-	Value stack[STACK_MAX]; //TODO Dynamic stack
+	size_t frameSize;
+	Value* stack;
+	size_t stackSize;
 	Value* stackTop;
 	Table globals;
 	Table strings;

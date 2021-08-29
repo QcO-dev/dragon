@@ -17,8 +17,19 @@ static void resetStack(VM* vm) {
 	vm->openUpvalues = NULL;
 }
 
-void initVM(VM* vm) {
+static void initializeStack(VM* vm) {
+	vm->shouldGC = false;
+	vm->frameSize = 64;
+	vm->frames = ALLOCATE(vm, CallFrame, vm->frameSize);
+
+	vm->stackSize = 256 * vm->frameSize;
+	vm->stack = ALLOCATE(vm, Value, vm->stackSize);
 	resetStack(vm);
+	vm->shouldGC = true;
+}
+
+void initVM(VM* vm) {
+	initializeStack(vm);
 	vm->objects = NULL;
 	vm->bytesAllocated = 0;
 	vm->nextGC = 1024 * 1024;
@@ -50,6 +61,10 @@ void freeVM(VM* vm) {
 	freeTable(vm, &vm->globals);
 	vm->constructorString = NULL;
 	freeObjects(vm);
+	vm->shouldGC = false;
+	FREE_ARRAY(vm, CallFrame, vm->frames, vm->frameSize);
+	FREE_ARRAY(vm, Value, vm->stack, vm->stackSize);
+	vm->shouldGC = true;
 }
 
 void push(VM* vm, Value value) {
@@ -78,17 +93,38 @@ void runtimeError(VM* vm, const char* format, ...) {
 	va_end(args);
 	fputs("\n", stderr);
 
+	size_t prevLine = 0;
+	ObjFunction* prevFunction = NULL;
+	size_t count = 0;
+	bool repeating = false;
+
 	for (size_t i = vm->frameCount; i > 0; i--) {
 		CallFrame* frame = &vm->frames[i - 1];
 		ObjFunction* function = frame->closure->function;
 		size_t instruction = frame->ip - function->chunk.code - 1;
-		fprintf(stderr, "[%zu] in ", getLine(&function->chunk.lines, instruction));
 
-		if (function->name == NULL) {
-			fprintf(stderr, "<script>\n");
+		size_t line = getLine(&function->chunk.lines, instruction);
+
+		if (line != prevLine || function != prevFunction) {
+			if (repeating == true) {
+				fprintf(stderr, "[Previous * %zu]\n", count);
+				repeating = false;
+				count = 0;
+			}
+			fprintf(stderr, "[%zu] in ", line);
+
+			if (function->name == NULL) {
+				fprintf(stderr, "<script>\n");
+			}
+			else {
+				fprintf(stderr, "%s\n", function->name->chars);
+			}
+			prevFunction = function;
+			prevLine = line;
 		}
 		else {
-			fprintf(stderr, "%s\n", function->name->chars);
+			repeating = true;
+			count++;
 		}
 	}
 
@@ -135,10 +171,23 @@ static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
 		return false;
 	}
 
-	//TODO: Dynamic stack
+	
 	if (vm->frameCount == FRAMES_MAX) {
-		runtimeError(vm, "Stack overflow.");
+		runtimeError(vm, "Stack overflow (Max frame: %d).", FRAMES_MAX);
 		return false;
+	}
+
+	if (vm->frameCount + 1 >= vm->frameSize) {
+		size_t oldCapacity = vm->frameSize;
+		vm->frameSize = GROW_CAPACITY(vm->frameSize);
+		vm->frames = GROW_ARRAY(vm, CallFrame, vm->frames, oldCapacity, vm->frameSize);
+
+		size_t oldStackCapacity = vm->stackSize;
+		size_t stackTopDistance = vm->stackTop - vm->stack;
+
+		vm->stackSize = 256 * vm->frameSize;
+		vm->stack = GROW_ARRAY(vm, Value, vm->stack, oldStackCapacity, vm->stackSize);
+		vm->stackTop = vm->stack + stackTopDistance;
 	}
 
 	CallFrame* frame = &vm->frames[vm->frameCount++];
