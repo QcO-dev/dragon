@@ -69,7 +69,7 @@ typedef enum {
 	PREC_TERM,  // + -
 	PREC_FACTOR,  // * /
 	PREC_UNARY, // ! - ~
-	PREC_CALL,  // . ()
+	PREC_CALL,  // . () {} []
 	PREC_PRIMARY
 } Precedence;
 
@@ -605,6 +605,21 @@ static void objectCreation(Compiler* compiler, bool canAssign) {
 	object(compiler, canAssign);
 }
 
+static void list(Compiler* compiler, bool canAssign) {
+	uint8_t itemCount = 0;
+	if (!check(compiler, TOKEN_RIGHT_SQBR)) {
+		do {
+			expression(compiler);
+			if (itemCount == 255) {
+				error(compiler->parser, "Cannot initialize a list with more than 255 items.");
+			}
+			itemCount++;
+		} while (match(compiler, TOKEN_COMMA));
+	}
+	consume(compiler, TOKEN_RIGHT_SQBR, "Expected ']' after list items.");
+	emitPair(compiler, OP_LIST, itemCount);
+}
+
 static uint8_t argumentList(Compiler* compiler) {
 	uint8_t argCount = 0;
 	if (!check(compiler, TOKEN_RIGHT_PAREN)) {
@@ -643,6 +658,20 @@ static void dot(Compiler* compiler, bool canAssign) {
 	else {
 		emitByte(compiler, OP_GET_PROPERTY);
 		encodeConstant(compiler, name);
+	}
+}
+
+static void index(Compiler* compiler, bool canAssign) {
+	expression(compiler);
+
+	consume(compiler, TOKEN_RIGHT_SQBR, "Expected ']' after index");
+
+	if (canAssign && match(compiler, TOKEN_EQUAL)) {
+		expression(compiler);
+		emitByte(compiler, OP_SET_INDEX);
+	}
+	else {
+		emitByte(compiler, OP_GET_INDEX);
 	}
 }
 
@@ -970,6 +999,8 @@ ParseRule rules[] = {
   [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
   [TOKEN_LEFT_BRACE] = {objectCreation, object, PREC_CALL},
   [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
+  [TOKEN_LEFT_SQBR] = {list, index, PREC_CALL},
+  [TOKEN_RIGHT_SQBR] = {NULL, NULL, PREC_NONE},
   [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
   [TOKEN_DOT] = {NULL, dot, PREC_CALL},
   [TOKEN_COLON] = {NULL, NULL, PREC_NONE},

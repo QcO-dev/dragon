@@ -62,6 +62,11 @@ Value pop(VM* vm) {
 	return *vm->stackTop;
 }
 
+Value popN(VM* vm, size_t count) {
+	vm->stackTop -= count;
+	return *vm->stackTop;
+}
+
 static Value peek(VM* vm, size_t distance) {
 	return vm->stackTop[-1 - distance];
 }
@@ -287,6 +292,32 @@ static inline bool isInteger(double value) {
 	return floor(value) == value;
 }
 
+static bool validateListIndex(VM* vm, ObjList* list, Value indexVal, uintmax_t* dest) {
+	if (!IS_NUMBER(indexVal)) {
+		runtimeError(vm, "List index must be a number.");
+		return false;
+	}
+	double indexNum = AS_NUMBER(indexVal);
+	if (!isInteger(indexNum)) {
+		runtimeError(vm, "List index must be an integer.");
+		return false;
+	}
+	intmax_t indexSigned = (intmax_t)indexNum;
+	size_t listLength = list->items.count;
+	uintmax_t index = indexSigned;
+
+	if (indexSigned < 0) {
+		index = listLength - (-indexSigned);
+	}
+
+	if (index >= listLength) {
+		runtimeError(vm, "Index %d is out of bounds for list of length %d.", indexSigned, listLength);
+		return false;
+	}
+	*dest = index;
+	return true;
+}
+
 static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 	CallFrame* frame = &vm->frames[vm->frameCount - 1];
 	size_t baseFrameCount = vm->frameCount - 1;
@@ -335,6 +366,21 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		case OP_TRUE: push(vm, BOOL_VAL(true)); break;
 		case OP_FALSE: push(vm, BOOL_VAL(false)); break;
 		case OP_OBJECT: push(vm, OBJ_VAL(vm->objectClass)); break;
+
+		case OP_LIST: {
+			uint8_t itemCount = READ_BYTE();
+
+			ValueArray items;
+			initValueArray(&items);
+
+			for (size_t i = 0; i < itemCount; i++) {
+				writeValueArray(vm, &items, peek(vm, itemCount - i - 1));
+			}
+			ObjList* list = newList(vm, items);
+			popN(vm, itemCount);
+			push(vm, OBJ_VAL(list));
+			break;
+		}
 
 		case OP_GET_GLOBAL: {
 			ObjString* name = READ_STRING();
@@ -438,6 +484,79 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			break;
 		}
 
+		case OP_GET_INDEX: {
+			if (IS_LIST(peek(vm, 1))) {
+				Value indexVal = pop(vm);
+				ObjList* list = AS_LIST(pop(vm));
+
+				uintmax_t index;
+				if (!validateListIndex(vm, list, indexVal, &index)) {
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				push(vm, list->items.values[index]);
+				break;
+			}
+			else if (IS_INSTANCE(peek(vm, 1))) {
+				Value indexVal = pop(vm);
+				ObjInstance* instance = AS_INSTANCE(pop(vm));
+
+				if (!IS_STRING(indexVal)) {
+					runtimeError(vm, "Field name must be a string.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				ObjString* key = AS_STRING(indexVal);
+
+				Value value;
+				if (!tableGet(&instance->fields, key, &value)) {
+					push(vm, NULL_VAL);
+					break;
+				}
+				push(vm, value);
+				break;
+			}
+			runtimeError(vm, "Can only index into lists.");
+			return INTERPRETER_RUNTIME_ERR;
+		}
+
+		case OP_SET_INDEX: {
+			if (IS_LIST(peek(vm, 2))) {
+				Value value = pop(vm);
+				Value indexVal = pop(vm);
+				ObjList* list = AS_LIST(pop(vm));
+
+				uintmax_t index;
+				if (!validateListIndex(vm, list, indexVal, &index)) {
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				list->items.values[index] = value;
+				push(vm, value);
+				break;
+			}
+			else if (IS_INSTANCE(peek(vm, 2))) {
+				Value value = peek(vm, 0);
+				Value indexVal = peek(vm, 1);
+				ObjInstance* instance = AS_INSTANCE(peek(vm, 2));
+
+				if (!IS_STRING(indexVal)) {
+					runtimeError(vm, "Field name must be a string.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				ObjString* key = AS_STRING(indexVal);
+
+				tableSet(vm, &instance->fields, key, value);
+
+				popN(vm, 3);
+				push(vm, value);
+				break;
+			}
+			runtimeError(vm, "Can only index into lists.");
+			return INTERPRETER_RUNTIME_ERR;
+		}
+
 		case OP_GET_SUPER: {
 			ObjString* name = READ_STRING();
 			ObjClass* superclass = AS_CLASS(pop(vm));
@@ -461,8 +580,23 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			}
 			push(vm, NUMBER_VAL(-AS_NUMBER(pop(vm))));
 			break;
+
 		case OP_ADD: {
-			if (IS_STRING(peek(vm, 0)) || IS_STRING(peek(vm, 1))) {
+			if (IS_LIST(peek(vm, 1))) {
+				Value appendee = peek(vm, 0);
+				ObjList* list = AS_LIST(peek(vm, 1));
+				
+				ValueArray array;
+				initValueArray(&array);
+				for (size_t i = 0; i < list->items.count; i++) {
+					writeValueArray(vm, &array, list->items.values[i]);
+				}
+				writeValueArray(vm, &array, appendee);
+
+				ObjList* nList = newList(vm, array);
+				push(vm, OBJ_VAL(nList));
+			}
+			else if (IS_STRING(peek(vm, 0)) || IS_STRING(peek(vm, 1))) {
 				if (!concatenate(vm)) {
 					return INTERPRETER_RUNTIME_ERR;
 				}
@@ -473,7 +607,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, NUMBER_VAL(a + b));
 			}
 			else {
-				runtimeError(vm, "Operands must be numbers or strings");
+				runtimeError(vm, "Operands are invalid for + operation.");
 				return INTERPRETER_RUNTIME_ERR;
 			}
 			break;

@@ -77,13 +77,24 @@ bool isFalsey(Value value) {
 	return IS_NULL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
 
+bool listsEqual(ObjList* a, ObjList* b) {
+	if (a->items.count != b->items.count) return false;
+
+	for (size_t i = 0; i < a->items.count; i++) {
+		if (!valuesEqual(a->items.values[i], b->items.values[i])) return false;
+	}
+	return true;
+}
+
 bool valuesEqual(Value a, Value b) {
 	if (a.type != b.type) return false;
 	switch (a.type) {
 		case VAL_BOOL: return AS_BOOL(a) == AS_BOOL(b);
 		case VAL_NULL: return true;
 		case VAL_NUMBER: return AS_NUMBER(a) == AS_NUMBER(b);
-		case VAL_OBJ: return AS_OBJ(a) == AS_OBJ(b);
+		case VAL_OBJ: 
+			if (IS_LIST(a) && IS_LIST(b)) return listsEqual(AS_LIST(a), AS_LIST(b));
+			return AS_OBJ(a) == AS_OBJ(b);
 		default: return false; // Unreachable
 	}
 }
