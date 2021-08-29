@@ -497,6 +497,25 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, list->items.values[index]);
 				break;
 			}
+			else if (IS_INSTANCE(peek(vm, 1))) {
+				Value indexVal = pop(vm);
+				ObjInstance* instance = AS_INSTANCE(pop(vm));
+
+				if (!IS_STRING(indexVal)) {
+					runtimeError(vm, "Field name must be a string.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				ObjString* key = AS_STRING(indexVal);
+
+				Value value;
+				if (!tableGet(&instance->fields, key, &value)) {
+					push(vm, NULL_VAL);
+					break;
+				}
+				push(vm, value);
+				break;
+			}
 			runtimeError(vm, "Can only index into lists.");
 			return INTERPRETER_RUNTIME_ERR;
 		}
@@ -513,6 +532,24 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				}
 
 				list->items.values[index] = value;
+				push(vm, value);
+				break;
+			}
+			else if (IS_INSTANCE(peek(vm, 2))) {
+				Value value = peek(vm, 0);
+				Value indexVal = peek(vm, 1);
+				ObjInstance* instance = AS_INSTANCE(peek(vm, 2));
+
+				if (!IS_STRING(indexVal)) {
+					runtimeError(vm, "Field name must be a string.");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				ObjString* key = AS_STRING(indexVal);
+
+				tableSet(vm, &instance->fields, key, value);
+
+				popN(vm, 3);
 				push(vm, value);
 				break;
 			}
