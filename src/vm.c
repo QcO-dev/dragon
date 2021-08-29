@@ -543,8 +543,23 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			}
 			push(vm, NUMBER_VAL(-AS_NUMBER(pop(vm))));
 			break;
+
 		case OP_ADD: {
-			if (IS_STRING(peek(vm, 0)) || IS_STRING(peek(vm, 1))) {
+			if (IS_LIST(peek(vm, 1))) {
+				Value appendee = peek(vm, 0);
+				ObjList* list = AS_LIST(peek(vm, 1));
+				
+				ValueArray array;
+				initValueArray(&array);
+				for (size_t i = 0; i < list->items.count; i++) {
+					writeValueArray(vm, &array, list->items.values[i]);
+				}
+				writeValueArray(vm, &array, appendee);
+
+				ObjList* nList = newList(vm, array);
+				push(vm, OBJ_VAL(nList));
+			}
+			else if (IS_STRING(peek(vm, 0)) || IS_STRING(peek(vm, 1))) {
 				if (!concatenate(vm)) {
 					return INTERPRETER_RUNTIME_ERR;
 				}
@@ -555,7 +570,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, NUMBER_VAL(a + b));
 			}
 			else {
-				runtimeError(vm, "Operands must be numbers or strings");
+				runtimeError(vm, "Operands are invalid for + operation.");
 				return INTERPRETER_RUNTIME_ERR;
 			}
 			break;
