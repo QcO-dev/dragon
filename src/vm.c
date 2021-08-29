@@ -252,14 +252,23 @@ static void defineMethod(VM* vm, ObjString* name) {
 	pop(vm);
 }
 
-static bool bindMethod(VM* vm, ObjClass* klass, ObjString* name) {
+static bool bindMethod(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString* name) {
 	Value method;
 	if (!tableGet(&klass->methods, name, &method)) {
 		runtimeError(vm, "Undefined property '%s'.", name->chars);
 		return false;
 	}
-	// TODO HERE
-	ObjBoundMethod* bound = newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
+	
+	Obj* bound = NULL;
+	if (IS_NATIVE(method)) {
+		ObjNative* native = AS_NATIVE(method);
+		native->isBound = true;
+		native->bound = OBJ_VAL(instance);
+		bound = native;
+	}
+	else {
+		bound = newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
+	}
 
 	pop(vm);
 	push(vm, OBJ_VAL(bound));
@@ -510,11 +519,10 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			Value value;
 			if (tableGet(&instance->fields, name, &value)) {
 				pop(vm);
-				// TODO HERE
 				push(vm, value);
 				break;
 			}
-			if (!bindMethod(vm, instance->klass, name)) {
+			if (!bindMethod(vm, instance, instance->klass, name)) {
 				return INTERPRETER_RUNTIME_ERR;
 			}
 			break;
@@ -621,7 +629,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			ObjString* name = READ_STRING();
 			ObjClass* superclass = AS_CLASS(pop(vm));
 
-			if (!bindMethod(vm, superclass, name)) {
+			if (!bindMethod(vm, AS_INSTANCE(frame->slots[0]), superclass, name)) {
 				return INTERPRETER_RUNTIME_ERR;
 			}
 			break;
