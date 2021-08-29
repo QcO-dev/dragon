@@ -4,11 +4,11 @@
 #include <time.h>
 #include <math.h>
 
-static Value clockNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
+static Value clockNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
-static Value printNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
+static Value printNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	for (size_t i = 0; i < argCount; i++) {
 		ObjString* value = valueToString(vm, args[i], hasError);
 		if (*hasError) return NULL_VAL;
@@ -19,15 +19,15 @@ static Value printNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) 
 	return NULL_VAL;
 }
 
-static Value toStringNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
+static Value toStringNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	return OBJ_VAL(valueToString(vm, args[0], hasError));
 }
 
-static Value reprNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
+static Value reprNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	return OBJ_VAL(valueToRepr(vm, args[0]));
 }
 
-static Value sqrtNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
+static Value sqrtNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	if (!IS_NUMBER(args[0])) {
 		runtimeError(vm, "Expected number as first argument to sqrt.");
 		*hasError = true;
@@ -36,17 +36,17 @@ static Value sqrtNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
 	return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
 }
 
-static Value callNative(VM* vm, uint8_t argCount, Value* args, bool* hasError) {
-	return callDragonFromNative(vm, args[0], 0, hasError);
+static Value callNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+	return callDragonFromNative(vm, bound, args[0], 0, hasError);
 }
 
 void defineGlobalNatives(VM* vm) {
-	defineNative(vm, "toString", 1, toStringNative);
-	defineNative(vm, "repr", 1, reprNative);
-	defineNative(vm, "clock", 0, clockNative);
-	defineNative(vm, "sqrt", 1, sqrtNative);
-	defineNative(vm, "call", 1, callNative);
-	defineNative(vm, "print", 1, printNative);
+	defineNative(vm, &vm->globals, "toString", 1, toStringNative);
+	defineNative(vm, &vm->globals, "repr", 1, reprNative);
+	defineNative(vm, &vm->globals, "clock", 0, clockNative);
+	defineNative(vm, &vm->globals, "sqrt", 1, sqrtNative);
+	defineNative(vm, &vm->globals, "call", 1, callNative);
+	defineNative(vm, &vm->globals, "print", 1, printNative);
 }
 
 /*
@@ -55,7 +55,7 @@ void defineGlobalNatives(VM* vm) {
 	- defineNative creates the needed objects and adds them to the global variable table in the VM, for a given native method.
 */
 
-Value callDragonFromNative(VM* vm, Value callee, size_t argCount, bool* hasError) {
+Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, bool* hasError) {
 	if (!IS_NATIVE(callee)) {
 		callValue(vm, callee, argCount);
 
@@ -79,7 +79,7 @@ Value callDragonFromNative(VM* vm, Value callee, size_t argCount, bool* hasError
 		}
 
 		bool functionErr = false;
-		Value returnValue = native->function(vm, argCount, vm->stackTop - argCount, &functionErr);
+		Value returnValue = native->function(vm, bound, argCount, vm->stackTop - argCount, &functionErr);
 		if (functionErr) {
 			*hasError = true;
 			return NULL_VAL;
@@ -88,10 +88,10 @@ Value callDragonFromNative(VM* vm, Value callee, size_t argCount, bool* hasError
 	}
 }
 
-void defineNative(VM* vm, const char* name, size_t arity, NativeFn function) {
+void defineNative(VM* vm, Table* table, const char* name, size_t arity, NativeFn function) {
 	push(vm, OBJ_VAL(copyString(vm, name, strlen(name))));
 	push(vm, OBJ_VAL(newNative(vm, arity, function)));
-	tableSet(vm, &vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
+	tableSet(vm, table, AS_STRING(vm->stack[0]), vm->stack[1]);
 	pop(vm);
 	pop(vm);
 }

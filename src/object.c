@@ -66,6 +66,8 @@ ObjNative* newNative(VM* vm, size_t arity, NativeFn function) {
 	ObjNative* native = ALLOCATE_OBJ(vm, ObjNative, OBJ_NATIVE);
 	native->function = function;
 	native->arity = arity;
+	native->isBound = false;
+	native->bound = NULL_VAL;
 	return native;
 }
 
@@ -201,7 +203,7 @@ ObjString* listToString(VM* vm, ObjList* list, bool* hasError, bool repr) {
 ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError) {
 	Value method;
 	if (tableGet(&instance->fields, copyString(vm, "toString", 8), &method)) {
-		Value stringForm = callDragonFromNative(vm, method, 0, hasError);
+		Value stringForm = callDragonFromNative(vm, NULL, method, 0, hasError);
 		if (!IS_STRING(stringForm)) { 
 			runtimeError(vm, "Instance's 'toString' method must return a string.");
 			*hasError = true;
@@ -210,7 +212,7 @@ ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError) {
 		return AS_STRING(stringForm);
 	}
 	else if (tableGet(&instance->klass->methods, copyString(vm, "toString", 8), &method)) {
-		Value stringForm = callDragonFromNative(vm, method, 0, hasError);
+		Value stringForm = callDragonFromNative(vm, NULL, method, 0, hasError);
 		if (!IS_STRING(stringForm)) {
 			runtimeError(vm, "Instance's 'toString' method must return a string.");
 			*hasError = true;
@@ -314,6 +316,45 @@ ObjString* objectToRepr(VM* vm, Value value) {
 			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
 		case OBJ_STRING:
 			return stringToRepr(vm, AS_STRING(value));
-		default: return; // Unreachable.
+		default: return NULL; // Unreachable.
 	}
+}
+
+static Value keysNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+	ValueArray array;
+	initValueArray(&array);
+
+	ObjInstance* instance = AS_INSTANCE(*bound);
+
+	for (size_t i = 0; i < instance->fields.capacity; i++) {
+		Entry* entry = &instance->fields.entries[i];
+		if (entry->key != NULL) {
+			writeValueArray(vm, &array, OBJ_VAL(entry->key));
+		}
+	}
+
+	ObjList* list = newList(vm, array);
+	return OBJ_VAL(list);
+}
+
+static Value valuesNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+	ValueArray array;
+	initValueArray(&array);
+
+	ObjInstance* instance = AS_INSTANCE(*bound);
+
+	for (size_t i = 0; i < instance->fields.capacity; i++) {
+		Entry* entry = &instance->fields.entries[i];
+		if (entry->key != NULL) {
+			writeValueArray(vm, &array, entry->value);
+		}
+	}
+
+	ObjList* list = newList(vm, array);
+	return OBJ_VAL(list);
+}
+
+void defineObjectNatives(VM* vm) {
+	defineNative(vm, &vm->objectClass->methods, "keys", 0, keysNative);
+	defineNative(vm, &vm->objectClass->methods, "values", 0, valuesNative);
 }
