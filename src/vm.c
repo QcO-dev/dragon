@@ -93,17 +93,38 @@ void runtimeError(VM* vm, const char* format, ...) {
 	va_end(args);
 	fputs("\n", stderr);
 
+	size_t prevLine = 0;
+	ObjFunction* prevFunction = NULL;
+	size_t count = 0;
+	bool repeating = false;
+
 	for (size_t i = vm->frameCount; i > 0; i--) {
 		CallFrame* frame = &vm->frames[i - 1];
 		ObjFunction* function = frame->closure->function;
 		size_t instruction = frame->ip - function->chunk.code - 1;
-		fprintf(stderr, "[%zu] in ", getLine(&function->chunk.lines, instruction));
 
-		if (function->name == NULL) {
-			fprintf(stderr, "<script>\n");
+		size_t line = getLine(&function->chunk.lines, instruction);
+
+		if (line != prevLine || function != prevFunction) {
+			if (repeating == true) {
+				fprintf(stderr, "[Previous * %zu]\n", count);
+				repeating = false;
+				count = 0;
+			}
+			fprintf(stderr, "[%zu] in ", line);
+
+			if (function->name == NULL) {
+				fprintf(stderr, "<script>\n");
+			}
+			else {
+				fprintf(stderr, "%s\n", function->name->chars);
+			}
+			prevFunction = function;
+			prevLine = line;
 		}
 		else {
-			fprintf(stderr, "%s\n", function->name->chars);
+			repeating = true;
+			count++;
 		}
 	}
 
