@@ -247,7 +247,7 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 static bool concatenate(VM* vm) {
 	ObjString* b;
 	ObjString* a;
-	bool hasError;
+	bool hasError = false;
 	// Swaps stack so that .toString() implicit call functions (calling convention)
 	if (IS_INSTANCE(peek(vm, 1))) {
 		Value valB = pop(vm);
@@ -659,6 +659,23 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			push(vm, BOOL_VAL(valuesEqual(a, b)));
 			break;
 		}
+
+		case OP_IS: {
+			Value b = pop(vm);
+			Value a = pop(vm);
+
+			bool result;
+			if (IS_OBJ(a) && IS_OBJ(b)) {
+				result = AS_OBJ(a) == AS_OBJ(b);
+			}
+			else {
+				result = valuesEqual(a, b);
+			}
+			
+			push(vm, BOOL_VAL(result));
+			break;
+		}
+
 		case OP_GREATER: BINARY_OP(BOOL_VAL, > ); break;
 		case OP_LESS: BINARY_OP(BOOL_VAL, < ); break;
 
