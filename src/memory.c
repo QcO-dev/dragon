@@ -4,6 +4,7 @@
 #include "table.h"
 #include "compiler.h"
 #include <stdlib.h>
+#include <math.h>
 #ifdef DEBUG_LOG_GC
 #include <stdio.h>
 #include "debug.h"
@@ -15,7 +16,7 @@ static void freeObject(VM* vm, Obj* object);
 
 void* reallocate(VM* vm, void* pointer, size_t oldSize, size_t newSize) {
 
-	vm->bytesAllocated += newSize - oldSize;
+	vm->bytesAllocated += max(0, (intmax_t)newSize - (intmax_t)oldSize);
 
 	if (newSize > oldSize) {
 #ifdef DEBUG_STRESS_GC
@@ -180,10 +181,14 @@ void collectGarbage(VM* vm) {
 	size_t before = vm->bytesAllocated;
 #endif
 
+	vm->shouldGC = false;
+
 	markRoots(vm);
 	traceReferences(vm);
 	tableRemoveWhite(&vm->strings);
 	sweep(vm);
+
+	vm->shouldGC = true;
 
 	vm->nextGC = vm->bytesAllocated * GC_HEAP_GROW_FACTOR;
 
