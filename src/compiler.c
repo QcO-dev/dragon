@@ -64,7 +64,7 @@ typedef enum {
 	PREC_BIT_OR, // |
 	PREC_BIT_XOR, // ^
 	PREC_BIT_AND, // &
-	PREC_EQUALITY,  // == !=
+	PREC_EQUALITY,  // == != is
 	PREC_COMPARISON,  // < > <= >=
 	PREC_SHIFT, // << >> >>>
 	PREC_TERM,  // + -
@@ -743,6 +743,11 @@ static void or_(Compiler* compiler, bool canAssign) {
 	patchJump(compiler, endJump);
 }
 
+static void is(Compiler* compiler, bool canAssign) {
+	parsePrecedence(compiler, PREC_COMPARISON);
+	emitByte(compiler, OP_IS);
+}
+
 static void parsePrecedence(Compiler* compiler, Precedence precedence) {
 	advance(compiler);
 	ParseFn prefixRule = getRule(compiler->parser->previous.type)->prefix;
@@ -1038,6 +1043,7 @@ ParseRule rules[] = {
   [TOKEN_FOR] = {NULL, NULL, PREC_NONE},
   [TOKEN_FUNCTION] = {NULL, NULL, PREC_NONE},
   [TOKEN_IF] = {NULL, NULL, PREC_NONE},
+  [TOKEN_IS] = {NULL, is, PREC_EQUALITY},
   [TOKEN_NULL] = {literal, NULL, PREC_NONE},
   [TOKEN_OR] = {NULL, or_, PREC_OR},
   [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},

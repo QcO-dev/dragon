@@ -96,6 +96,7 @@ int disassembleInstruction(VM* vm, Chunk* chunk, int offset) {
 		case OP_ASH: return simpleInstruction("ASH", offset);
 		case OP_RSH: return simpleInstruction("RSH", offset);
 		case OP_EQUAL: return simpleInstruction("EQUAL", offset);
+		case OP_IS: return simpleInstruction("IS", offset);
 		case OP_GREATER: return simpleInstruction("GREATER", offset);
 		case OP_LESS: return simpleInstruction("LESS", offset);
 		case OP_JUMP: return jumpInstruction("JUMP", 1, chunk, offset);

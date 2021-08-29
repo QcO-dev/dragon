@@ -38,6 +38,7 @@ typedef enum {
 	OP_ASH,
 	OP_RSH,
 	OP_EQUAL,
+	OP_IS,
 	OP_GREATER,
 	OP_LESS,
 	OP_JUMP_IF_FALSE,
