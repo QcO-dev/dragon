@@ -24,6 +24,7 @@ struct VM {
 	Table globals;
 	Table strings;
 	Table listMethods;
+	Table stringMethods;
 	ObjString* constructorString;
 	ObjClass* objectClass;
 	Compiler* compiler;

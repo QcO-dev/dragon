@@ -8,6 +8,7 @@
 #include "natives.h"
 #include "exception.h"
 #include "list.h"
+#include "strings.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -43,6 +44,7 @@ void initVM(VM* vm) {
 	initTable(&vm->strings);
 	initTable(&vm->globals);
 	initTable(&vm->listMethods);
+	initTable(&vm->stringMethods);
 
 	vm->constructorString = NULL; // GC Call
 	vm->constructorString = copyString(vm, "constructor", 11);
@@ -60,12 +62,14 @@ void initVM(VM* vm) {
 	defineObjectNatives(vm);
 	defineExceptionClasses(vm);
 	defineListMethods(vm);
+	defineStringMethods(vm);
 }
 
 void freeVM(VM* vm) {
 	freeTable(vm, &vm->strings);
 	freeTable(vm, &vm->globals);
 	freeTable(vm, &vm->listMethods);
+	freeTable(vm, &vm->stringMethods);
 	vm->constructorString = NULL;
 	vm->shouldGC = false;
 	FREE_ARRAY(vm, CallFrame, vm->frames, vm->frameSize);
@@ -387,6 +391,14 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 		native->bound = receiver;
 		return callValue(vm, method, argCount);
 	}
+	else if (IS_STRING(receiver)) {
+		Value method;
+		if (!tableGet(&vm->stringMethods, name, &method)) return throwException(vm, "PropertyException", "Undefined string method '%s'.", name->chars);
+		ObjNative* native = AS_NATIVE(method);
+		native->isBound = true;
+		native->bound = receiver;
+		return callValue(vm, method, argCount);
+	}
 
 	if (!IS_INSTANCE(receiver)) {
 		return throwException(vm, "TypeException", "Only instances contain methods.");
@@ -605,6 +617,15 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			if (IS_LIST(peek(vm, 0))) {
 				Value method;
 				if (!tableGet(&vm->listMethods, name, &method)) return throwException(vm, "PropertyException", "Undefined list method '%s'.", name->chars);
+				ObjNative* native = AS_NATIVE(method);
+				native->isBound = true;
+				native->bound = pop(vm);
+				push(vm, method);
+				break;
+			}
+			else if (IS_STRING(peek(vm, 0))) {
+				Value method;
+				if (!tableGet(&vm->stringMethods, name, &method)) return throwException(vm, "PropertyException", "Undefined string method '%s'.", name->chars);
 				ObjNative* native = AS_NATIVE(method);
 				native->isBound = true;
 				native->bound = pop(vm);
