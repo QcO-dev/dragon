@@ -135,15 +135,22 @@ ObjString* copyString(VM* vm, const char* chars, size_t length) {
 }
 
 ObjString* makeStringf(VM* vm, const char* format, ...) {
-	va_list vsnargs, vsargs;
-	va_start(vsnargs, format);
+	va_list args;
+	va_start(args, format);
+	ObjString* string = makeStringvf(vm, format, args);
+	va_end(args);
+	
+	return string;
+}
+
+ObjString* makeStringvf(VM* vm, const char* format, va_list vsnargs) {
+	va_list vsargs;
 	va_copy(vsargs, vsnargs);
 	int length = vsnprintf(NULL, 0, format, vsnargs);
 	va_end(vsnargs);
 	char* string = malloc((size_t)length + 1);
-	
+
 	vsprintf(string, format, vsargs);
-	va_end(vsargs);
 
 	return takeString(vm, string, length);
 }

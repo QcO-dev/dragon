@@ -6,6 +6,7 @@
 #include "memory.h"
 #include "leb128.h"
 #include "natives.h"
+#include "exception.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -55,6 +56,7 @@ void initVM(VM* vm) {
 	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
 	defineGlobalNatives(vm);
 	defineObjectNatives(vm);
+	defineExceptionClasses(vm);
 }
 
 void freeVM(VM* vm) {
@@ -146,7 +148,7 @@ static bool throwGeneral(VM* vm, ObjInstance* throwee) {
 
 	bool hasError = false;
 	ObjString* fullMessage = makeStringf(vm, "%s: %s", throwee->klass->name->chars, valueToString(vm, message, &hasError)->chars);
-	if (hasError) return INTERPRETER_RUNTIME_ERR;
+	if (hasError) return false;
 
 	writeValueArray(vm, &stackTrace, OBJ_VAL(fullMessage));
 
@@ -213,6 +215,34 @@ static bool throwGeneral(VM* vm, ObjInstance* throwee) {
 	frame->ip = frame->catchJump;
 
 	return true;
+}
+
+static bool throwException(VM* vm, const char* name, const char* format, ...) {
+	va_list args;
+	va_start(args, format);
+	ObjString* message = makeStringvf(vm, format, args);
+	va_end(args);
+	push(vm, OBJ_VAL(message));
+
+	ObjString* nameStr = copyString(vm, name, strlen(name));
+
+	Value value;
+	if (!tableGet(&vm->globals, nameStr, &value)) {
+		fprintf(stderr, "Expected '%s' to be available at global scope.", name);
+		return false;
+	}
+	if (!IS_CLASS(value)) {
+		fprintf(stderr, "Expected '%s' to be a class.", name);
+		return false;
+	}
+
+	ObjInstance* instance = newInstance(vm, AS_CLASS(value));
+	push(vm, OBJ_VAL(instance));
+	tableSet(vm, &instance->fields, copyString(vm, "message", 7), OBJ_VAL(message));
+
+	popN(vm, 2);
+	push(vm, OBJ_VAL(instance));
+	return throwGeneral(vm, instance);
 }
 
 static ObjUpvalue* captureUpvalue(VM* vm, Value* local) {
@@ -361,10 +391,10 @@ static bool bindMethod(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString
 		ObjNative* native = AS_NATIVE(method);
 		native->isBound = true;
 		native->bound = OBJ_VAL(instance);
-		bound = native;
+		bound = (Obj*)native;
 	}
 	else {
-		bound = newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
+		bound = (Obj*)newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
 	}
 
 	pop(vm);
@@ -493,8 +523,10 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 #define BINARY_OP(valueType, op) \
 	do { \
 		if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
-			runtimeError(vm, "Operands must be numbers."); \
-			return INTERPRETER_RUNTIME_ERR; \
+			pop(vm); \
+			pop(vm); \
+			if(!throwException(vm, "TypeException", "Operands must be numbers.")) return INTERPRETER_RUNTIME_ERR; \
+			break; \
 		} \
 		double b = AS_NUMBER(pop(vm)); \
 		double a = AS_NUMBER(pop(vm)); \
@@ -504,14 +536,16 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 #define BITWISE_BINARY_OP(op) \
 	do { \
 		if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
-			runtimeError(vm, "Operands must be numbers."); \
-			return INTERPRETER_RUNTIME_ERR; \
+			pop(vm); \
+			pop(vm); \
+			if(!throwException(vm, "TypeException", "Operands must be numbers.")) return INTERPRETER_RUNTIME_ERR; \
+			break; \
 		} \
 		double b = AS_NUMBER(pop(vm)); \
 		double a = AS_NUMBER(pop(vm)); \
 		if (!isInteger(a) || !isInteger(b)) { \
-			runtimeError(vm, "Operands must be integers."); \
-			return INTERPRETER_RUNTIME_ERR; \
+			if(!throwException(vm, "TypeException", "Operands must be integers.")) return INTERPRETER_RUNTIME_ERR; \
+			break; \
 		} \
 		intmax_t aInt = (intmax_t)a; \
 		intmax_t bInt = (intmax_t)b; \
@@ -814,7 +848,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			}
 			uintmax_t aInt = (uintmax_t)a;
 			uintmax_t bInt = (uintmax_t)b;
-			push(vm, NUMBER_VAL(aInt >> bInt));
+			push(vm, NUMBER_VAL((double)(aInt >> bInt)));
 			break;
 		}
 

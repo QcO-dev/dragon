@@ -4,6 +4,7 @@
 #include "value.h"
 #include "chunk.h"
 #include "table.h"
+#include <stdarg.h>
 
 typedef enum {
 	OBJ_BOUND_METHOD,
@@ -97,6 +98,7 @@ ObjUpvalue* newUpvalue(VM* vm, Value* slot);
 ObjString* takeString(VM* vm, char* chars, size_t length);
 ObjString* copyString(VM* vm, const char* chars, size_t length);
 ObjString* makeStringf(VM* vm, const char* format, ...);
+ObjString* makeStringvf(VM* vm, const char* format, va_list args);
 ObjString* objectToString(VM* vm, Value value, bool* hasError);
 ObjString* objectToRepr(VM* vm, Value value);
 void defineObjectNatives(VM* vm);
