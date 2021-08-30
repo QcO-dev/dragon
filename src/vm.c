@@ -899,7 +899,9 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		}
 
 		case OP_THROW: {
-			Value throwee = pop(vm);
+			Value throwee = peek(vm, 0);
+
+			//TODO Type checking
 
 			while (!frame->isTry) {
 				Value result = pop(vm);

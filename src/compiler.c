@@ -945,7 +945,20 @@ static void tryStatement(Compiler* compiler) {
 	}
 	patchJump(compiler, catchLocation);
 
+	beginScope(compiler);
+
+	if (match(compiler, TOKEN_LEFT_PAREN)) {
+		uint32_t variable = parseVariable(compiler, "Expected variable name to bind exception to.");
+		consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after catch clause.");
+		defineVariable(compiler, variable);
+	}
+	else {
+		emitByte(compiler, OP_POP);
+	}
+
 	statement(compiler);
+
+	endScope(compiler);
 
 	patchJump(compiler, tryFinallyJump);
 
