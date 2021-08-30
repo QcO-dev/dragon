@@ -901,17 +901,46 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		case OP_THROW: {
 			Value throwee = peek(vm, 0);
 
-			//TODO Type checking
+			if (!IS_INSTANCE(throwee)) {
+				runtimeError(vm, "Throwee must be an instance.");
+				return INTERPRETER_RUNTIME_ERR;
+			}
+
+			ObjInstance* instance = AS_INSTANCE(throwee);
+
+			ValueArray stackTrace;
+			initValueArray(&stackTrace);
+
+			Value message;
+			if (!tableGet(&instance->fields, copyString(vm, "message", 7), &message)) {
+				message = NULL_VAL;
+			}
+
+			bool hasError = false;
+			ObjString* fullMessage = makeStringf(vm, "%s: %s", instance->klass->name->chars, valueToString(vm, message, &hasError)->chars);
+			if (hasError) return INTERPRETER_RUNTIME_ERR;
+
+			writeValueArray(vm, &stackTrace, OBJ_VAL(fullMessage));
 
 			while (!frame->isTry) {
 				Value result = pop(vm);
 
 				closeUpvalues(vm, frame->slots);
 
+				ObjFunction* function = frame->closure->function;
+				size_t instruction = frame->ip - function->chunk.code - 1;
+				size_t line = getLine(&function->chunk.lines, instruction);
+
+				ObjString* traceLine = makeStringf(vm, "[%d] in %s", line, function->name == NULL ? "<script>" : function->name->chars);
+				writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
+
 				vm->frameCount--;
 				if (vm->frameCount == 0) {
 					pop(vm);
-					printf("Exception!");
+
+					for (size_t i = 0; i < stackTrace.count; i++) {
+						printf("%s\n", AS_CSTRING(stackTrace.values[i]));
+					}
 					return INTERPRETER_RUNTIME_ERR;
 				}
 				vm->stackTop = frame->slots;
@@ -919,6 +948,16 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 				frame = &vm->frames[vm->frameCount - 1];
 			}
+			// The last call
+			ObjFunction* function = frame->closure->function;
+			size_t instruction = frame->ip - function->chunk.code - 1;
+			size_t line = getLine(&function->chunk.lines, instruction);
+
+			ObjString* traceLine = makeStringf(vm, "[%d] in %s", line, function->name == NULL ? "<script>" : function->name->chars);
+			writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
+
+			ObjList* stackTraceList = newList(vm, stackTrace);
+			tableSet(vm, &instance->fields, copyString(vm, "stackTrace", 10), OBJ_VAL(stackTraceList));
 
 			frame->isTry = false;
 			frame->ip = frame->catchJump;
