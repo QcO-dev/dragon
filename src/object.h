@@ -28,6 +28,7 @@ struct ObjFunction {
 	size_t arity;
 	size_t upvalueCount;
 	Chunk chunk;
+	bool isLambda;
 	ObjString* name;
 };
 

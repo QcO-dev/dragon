@@ -167,9 +167,22 @@ static void closeUpvalues(VM* vm, Value* last) {
 }
 
 static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
-	if(argCount != closure->function->arity) {
-		runtimeError(vm, "Expected %u arguments but got %u.", closure->function->arity, argCount);
-		return false;
+	size_t expected = closure->function->arity;
+	if(argCount != expected) {
+		if (!closure->function->isLambda) {
+			runtimeError(vm, "Expected %u arguments but got %u.", closure->function->arity, argCount);
+			return false;
+		}
+		if (argCount > expected) {
+			for (size_t i = argCount; i > closure->function->arity; i--) {
+				pop(vm);
+			}
+		}
+		else {
+			for (size_t i = argCount; i < closure->function->arity; i++) {
+				push(vm, NULL_VAL);
+			}
+		}
 	}
 
 	
@@ -194,7 +207,7 @@ static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
 	CallFrame* frame = &vm->frames[vm->frameCount++];
 	frame->closure = closure;
 	frame->ip = closure->function->chunk.code;
-	frame->slots = vm->stackTop - argCount - 1;
+	frame->slots = vm->stackTop - expected - 1;
 	return true;
 }
 

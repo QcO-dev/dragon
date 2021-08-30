@@ -625,6 +625,7 @@ static void startLambda(Compiler* compiler, Compiler* functionCompiler) {
 	beginScope(functionCompiler);
 
 	functionCompiler->function->name = copyString(compiler->vm, "<lambda>", 8);
+	functionCompiler->function->isLambda = true;
 }
 
 static void endLambda(Compiler* compiler, Compiler* functionCompiler) {

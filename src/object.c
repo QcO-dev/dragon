@@ -58,6 +58,7 @@ ObjFunction* newFunction(VM* vm) {
 	function->arity = 0;
 	function->upvalueCount = 0;
 	function->name = NULL;
+	function->isLambda = false;
 	initChunk(&function->chunk);
 	return function;
 }
