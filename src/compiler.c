@@ -917,6 +917,43 @@ static void forStatement(Compiler* compiler) {
 	endScope(compiler);
 }
 
+static void throwStatement(Compiler* compiler) {
+	if (compiler->type == TYPE_SCRIPT || compiler->type == TYPE_CONSTRUCTOR) {
+		error(compiler->parser, "Cannot use 'throw' in current scope.");
+	}
+
+	expression(compiler);
+
+	emitByte(compiler, OP_THROW);
+
+	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after throw statement.");
+}
+
+static void tryStatement(Compiler* compiler) {
+	emitByte(compiler, OP_TRY_BEGIN);
+
+	size_t catchLocation = currentChunk(compiler)->count;
+	emitPair(compiler, 0xff, 0xff);
+
+	statement(compiler);
+	emitByte(compiler, OP_TRY_END);
+
+	size_t tryFinallyJump = emitJump(compiler, OP_JUMP);
+
+	if (!match(compiler, TOKEN_CATCH)) {
+		error(compiler->parser, "Expected 'catch' block after try.");
+	}
+	patchJump(compiler, catchLocation);
+
+	statement(compiler);
+
+	patchJump(compiler, tryFinallyJump);
+
+	if (match(compiler, TOKEN_FINALLY)) {
+		statement(compiler);
+	}
+}
+
 static void block(Compiler* compiler) {
 	while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
 		declaration(compiler);
@@ -936,6 +973,12 @@ static void statement(Compiler* compiler) {
 	}
 	else if (match(compiler, TOKEN_FOR)) {
 		forStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_THROW)) {
+		throwStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_TRY)) {
+		tryStatement(compiler);
 	}
 	else if (match(compiler, TOKEN_LEFT_BRACE)) {
 		beginScope(compiler);
@@ -1085,9 +1128,11 @@ ParseRule rules[] = {
   [TOKEN_STRING] = {string, NULL, PREC_NONE},
   [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
   [TOKEN_AND] = {NULL, and_, PREC_AND},
+  [TOKEN_CATCH] = {NULL, NULL, PREC_NONE},
   [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
   [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
   [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
+  [TOKEN_FINALLY] = {NULL, NULL, PREC_NONE},
   [TOKEN_FOR] = {NULL, NULL, PREC_NONE},
   [TOKEN_FUNCTION] = {NULL, NULL, PREC_NONE},
   [TOKEN_IF] = {NULL, NULL, PREC_NONE},
@@ -1098,7 +1143,9 @@ ParseRule rules[] = {
   [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
   [TOKEN_SUPER] = {super_, NULL, PREC_NONE},
   [TOKEN_THIS] = {this_, NULL, PREC_NONE},
+  [TOKEN_THROW] = {NULL, NULL, PREC_NONE},
   [TOKEN_TRUE] = {literal, NULL, PREC_NONE},
+  [TOKEN_TRY] = {NULL, NULL, PREC_NONE},
   [TOKEN_VAR] = {NULL, NULL, PREC_NONE},
   [TOKEN_WHILE] = {NULL, NULL, PREC_NONE},
   [TOKEN_ERROR] = {NULL, NULL, PREC_NONE},

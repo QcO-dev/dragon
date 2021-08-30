@@ -135,6 +135,15 @@ int disassembleInstruction(VM* vm, Chunk* chunk, int offset) {
 		case OP_GET_INDEX: return simpleInstruction("GET_INDEX", offset);
 		case OP_SET_INDEX: return simpleInstruction("SET_INDEX", offset);
 		case OP_GET_SUPER: return constantInstruction("GET_SUPER", vm, chunk, offset);
+		case OP_THROW: return simpleInstruction("THROW", offset);
+		case OP_TRY_BEGIN: {
+			uint16_t jump = chunk->code[offset + 1] << 8;
+			jump |= chunk->code[offset + 2];
+
+			printf("%-16s %4d\n", "TRY_BEGIN", offset + jump);
+			return offset + 3;
+		}
+		case OP_TRY_END: return simpleInstruction("TRY_END", offset);
 		case OP_RETURN: return simpleInstruction("RETURN", offset);
 		default: {
 			printf("Unknown Opcode %d\n", instruction);

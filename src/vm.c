@@ -208,6 +208,7 @@ static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
 	frame->closure = closure;
 	frame->ip = closure->function->chunk.code;
 	frame->slots = vm->stackTop - expected - 1;
+	frame->isTry = false;
 	return true;
 }
 
@@ -894,6 +895,46 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			if (!invokeFromClass(vm, AS_INSTANCE(frame->slots[0]), superclass, method, argCount)) {
 				return INTERPRETER_RUNTIME_ERR;
 			}
+			break;
+		}
+
+		case OP_THROW: {
+			Value throwee = pop(vm);
+
+			while (!frame->isTry) {
+				Value result = pop(vm);
+
+				closeUpvalues(vm, frame->slots);
+
+				vm->frameCount--;
+				if (vm->frameCount == 0) {
+					pop(vm);
+					printf("Exception!");
+					return INTERPRETER_RUNTIME_ERR;
+				}
+				vm->stackTop = frame->slots;
+				push(vm, result);
+
+				frame = &vm->frames[vm->frameCount - 1];
+			}
+
+			frame->isTry = false;
+			frame->ip = frame->catchJump;
+
+			break;
+		}
+
+		case OP_TRY_BEGIN: {
+			uint16_t catchLocation = READ_SHORT();
+
+			frame->isTry = true;
+			frame->catchJump = frame->ip + catchLocation;
+
+			break;
+		}
+
+		case OP_TRY_END: {
+			frame->isTry = false;
 			break;
 		}
 
