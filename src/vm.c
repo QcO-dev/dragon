@@ -68,6 +68,8 @@ void freeVM(VM* vm) {
 	vm->shouldGC = true;
 }
 
+static void closeUpvalues(VM* vm, Value* last);
+
 void push(VM* vm, Value value) {
 	*vm->stackTop = value;
 	vm->stackTop++;
@@ -130,6 +132,87 @@ void runtimeError(VM* vm, const char* format, ...) {
 	}
 
 	resetStack(vm);
+}
+
+static bool throwGeneral(VM* vm, ObjInstance* throwee) {
+	CallFrame* frame = &vm->frames[vm->frameCount - 1];
+	ValueArray stackTrace;
+	initValueArray(&stackTrace);
+
+	Value message;
+	if (!tableGet(&throwee->fields, copyString(vm, "message", 7), &message)) {
+		message = NULL_VAL;
+	}
+
+	bool hasError = false;
+	ObjString* fullMessage = makeStringf(vm, "%s: %s", throwee->klass->name->chars, valueToString(vm, message, &hasError)->chars);
+	if (hasError) return INTERPRETER_RUNTIME_ERR;
+
+	writeValueArray(vm, &stackTrace, OBJ_VAL(fullMessage));
+
+	size_t prevLine = 0;
+	ObjFunction* prevFunction = NULL;
+	size_t count = 0;
+	bool repeating = false;
+
+	while (!frame->isTry) {
+		Value result = pop(vm);
+
+		closeUpvalues(vm, frame->slots);
+
+		// Add to stack trace
+		ObjFunction* function = frame->closure->function;
+		size_t instruction = frame->ip - function->chunk.code - 1;
+		size_t line = getLine(&function->chunk.lines, instruction);
+		if (line != prevLine || function != prevFunction) {
+			ObjString* traceLine;
+			if (repeating) {
+				traceLine = makeStringf(vm, "[Previous * %zu]", count);
+				repeating = false;
+				count = 0;
+			}
+			else { 
+				traceLine = makeStringf(vm, "[%d] in %s", line, function->name == NULL ? "<script>" : function->name->chars);
+			}
+			writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
+			prevFunction = function;
+			prevLine = line;
+		}
+		else {
+			repeating = true;
+			count++;
+		}
+
+
+		vm->frameCount--;
+		if (vm->frameCount == 0) {
+			pop(vm);
+
+			for (size_t i = 0; i < stackTrace.count; i++) {
+				printf("%s\n", AS_CSTRING(stackTrace.values[i]));
+			}
+			return false;
+		}
+		vm->stackTop = frame->slots;
+		push(vm, result);
+
+		frame = &vm->frames[vm->frameCount - 1];
+	}
+	// The last call
+	ObjFunction* function = frame->closure->function;
+	size_t instruction = frame->ip - function->chunk.code - 1;
+	size_t line = getLine(&function->chunk.lines, instruction);
+
+	ObjString* traceLine = makeStringf(vm, "[%d] in %s", line, function->name == NULL ? "<script>" : function->name->chars);
+	writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
+
+	ObjList* stackTraceList = newList(vm, stackTrace);
+	tableSet(vm, &throwee->fields, copyString(vm, "stackTrace", 10), OBJ_VAL(stackTraceList));
+
+	frame->isTry = false;
+	frame->ip = frame->catchJump;
+
+	return true;
 }
 
 static ObjUpvalue* captureUpvalue(VM* vm, Value* local) {
@@ -908,59 +991,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 			ObjInstance* instance = AS_INSTANCE(throwee);
 
-			ValueArray stackTrace;
-			initValueArray(&stackTrace);
-
-			Value message;
-			if (!tableGet(&instance->fields, copyString(vm, "message", 7), &message)) {
-				message = NULL_VAL;
-			}
-
-			bool hasError = false;
-			ObjString* fullMessage = makeStringf(vm, "%s: %s", instance->klass->name->chars, valueToString(vm, message, &hasError)->chars);
-			if (hasError) return INTERPRETER_RUNTIME_ERR;
-
-			writeValueArray(vm, &stackTrace, OBJ_VAL(fullMessage));
-
-			while (!frame->isTry) {
-				Value result = pop(vm);
-
-				closeUpvalues(vm, frame->slots);
-
-				ObjFunction* function = frame->closure->function;
-				size_t instruction = frame->ip - function->chunk.code - 1;
-				size_t line = getLine(&function->chunk.lines, instruction);
-
-				ObjString* traceLine = makeStringf(vm, "[%d] in %s", line, function->name == NULL ? "<script>" : function->name->chars);
-				writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
-
-				vm->frameCount--;
-				if (vm->frameCount == 0) {
-					pop(vm);
-
-					for (size_t i = 0; i < stackTrace.count; i++) {
-						printf("%s\n", AS_CSTRING(stackTrace.values[i]));
-					}
-					return INTERPRETER_RUNTIME_ERR;
-				}
-				vm->stackTop = frame->slots;
-				push(vm, result);
-
-				frame = &vm->frames[vm->frameCount - 1];
-			}
-			// The last call
-			ObjFunction* function = frame->closure->function;
-			size_t instruction = frame->ip - function->chunk.code - 1;
-			size_t line = getLine(&function->chunk.lines, instruction);
-
-			ObjString* traceLine = makeStringf(vm, "[%d] in %s", line, function->name == NULL ? "<script>" : function->name->chars);
-			writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
-
-			ObjList* stackTraceList = newList(vm, stackTrace);
-			tableSet(vm, &instance->fields, copyString(vm, "stackTrace", 10), OBJ_VAL(stackTraceList));
-
-			frame->isTry = false;
-			frame->ip = frame->catchJump;
+			if (!throwGeneral(vm, instance)) return INTERPRETER_RUNTIME_ERR;
 
 			break;
 		}
