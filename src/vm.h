@@ -23,6 +23,7 @@ struct VM {
 	Value* stackTop;
 	Table globals;
 	Table strings;
+	Table listMethods;
 	ObjString* constructorString;
 	ObjClass* objectClass;
 	Compiler* compiler;

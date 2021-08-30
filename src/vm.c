@@ -7,6 +7,7 @@
 #include "leb128.h"
 #include "natives.h"
 #include "exception.h"
+#include "list.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -41,6 +42,7 @@ void initVM(VM* vm) {
 	vm->compiler = NULL;
 	initTable(&vm->strings);
 	initTable(&vm->globals);
+	initTable(&vm->listMethods);
 
 	vm->constructorString = NULL; // GC Call
 	vm->constructorString = copyString(vm, "constructor", 11);
@@ -57,11 +59,13 @@ void initVM(VM* vm) {
 	defineGlobalNatives(vm);
 	defineObjectNatives(vm);
 	defineExceptionClasses(vm);
+	defineListMethods(vm);
 }
 
 void freeVM(VM* vm) {
 	freeTable(vm, &vm->strings);
 	freeTable(vm, &vm->globals);
+	freeTable(vm, &vm->listMethods);
 	vm->constructorString = NULL;
 	vm->shouldGC = false;
 	FREE_ARRAY(vm, CallFrame, vm->frames, vm->frameSize);
@@ -375,6 +379,15 @@ static bool invokeFromClass(VM* vm, ObjInstance* instance, ObjClass* klass, ObjS
 static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 	Value receiver = peek(vm, argCount);
 
+	if (IS_LIST(receiver)) {
+		Value method;
+		if (!tableGet(&vm->listMethods, name, &method)) return throwException(vm, "PropertyException", "Undefined list method '%s'.", name->chars);
+		ObjNative* native = AS_NATIVE(method);
+		native->isBound = true;
+		native->bound = receiver;
+		return callValue(vm, method, argCount);
+	}
+
 	if (!IS_INSTANCE(receiver)) {
 		return throwException(vm, "TypeException", "Only instances contain methods.");
 	}
@@ -587,13 +600,23 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		}
 
 		case OP_GET_PROPERTY: {
+			ObjString* name = READ_STRING();
+
+			if (IS_LIST(peek(vm, 0))) {
+				Value method;
+				if (!tableGet(&vm->listMethods, name, &method)) return throwException(vm, "PropertyException", "Undefined list method '%s'.", name->chars);
+				ObjNative* native = AS_NATIVE(method);
+				native->isBound = true;
+				native->bound = pop(vm);
+				push(vm, method);
+				break;
+			}
+
 			if (!IS_INSTANCE(peek(vm, 0))) {
 				if (!throwException(vm, "TypeException", "Only instances contain properties.")) return INTERPRETER_RUNTIME_ERR;
 				break;
 			}
 			ObjInstance* instance = AS_INSTANCE(peek(vm, 0));
-			ObjString* name = READ_STRING();
-
 			Value value;
 			if (tableGet(&instance->fields, name, &value)) {
 				pop(vm);
