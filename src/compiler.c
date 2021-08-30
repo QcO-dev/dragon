@@ -620,6 +620,62 @@ static void list(Compiler* compiler, bool canAssign) {
 	emitPair(compiler, OP_LIST, itemCount);
 }
 
+static void startLambda(Compiler* compiler, Compiler* functionCompiler) {
+	initCompiler(functionCompiler, compiler, TYPE_FUNCTION, compiler->vm, compiler->parser);
+	beginScope(functionCompiler);
+
+	functionCompiler->function->name = copyString(compiler->vm, "<lambda>", 8);
+	functionCompiler->function->isLambda = true;
+}
+
+static void endLambda(Compiler* compiler, Compiler* functionCompiler) {
+	if (match(compiler, TOKEN_LEFT_BRACE)) {
+		block(functionCompiler);
+	}
+	else {
+		expression(functionCompiler);
+		emitByte(functionCompiler, OP_RETURN);
+	}
+
+	functionCompiler->vm = compiler->vm;
+	ObjFunction* function = endCompiler(functionCompiler);
+	emitByte(compiler, OP_CLOSURE);
+	encodeConstant(compiler, makeConstant(compiler, OBJ_VAL(function)));
+
+	for (size_t i = 0; i < function->upvalueCount; i++) {
+		emitByte(compiler, functionCompiler->upvalues[i].isLocal ? 1 : 0);
+		emitByte(compiler, functionCompiler->upvalues[i].index);
+	}
+
+	compiler->vm->compiler = compiler->enclosing;
+}
+
+static void lambda(Compiler* compiler, bool canAssign) {
+	Compiler functionCompiler;
+	startLambda(compiler, &functionCompiler);
+
+	if (!check(compiler, TOKEN_BIT_OR)) {
+		do {
+			functionCompiler.function->arity++;
+			if (functionCompiler.function->arity > 255) {
+				error(compiler->parser, "Functions may not exceed 255 parameters.");
+			}
+			uint32_t constant = parseVariable(&functionCompiler, "Expected parameter name");
+			defineVariable(&functionCompiler, constant);
+		} while (match(compiler, TOKEN_COMMA));
+	}
+
+	consume(compiler, TOKEN_BIT_OR, "Expected '|' after parameters.");
+
+	endLambda(compiler, &functionCompiler);
+}
+
+static void lambdaEmpty(Compiler* compiler, bool canAssign) {
+	Compiler functionCompiler;
+	startLambda(compiler, &functionCompiler);
+	endLambda(compiler, &functionCompiler);
+}
+
 static uint8_t argumentList(Compiler* compiler) {
 	uint8_t argCount = 0;
 	if (!check(compiler, TOKEN_RIGHT_PAREN)) {
@@ -1020,7 +1076,7 @@ ParseRule rules[] = {
   [TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
   [TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
   [TOKEN_BIT_AND] = {NULL, binary, PREC_BIT_AND},
-  [TOKEN_BIT_OR] = {NULL, binary, PREC_BIT_OR},
+  [TOKEN_BIT_OR] = {lambda, binary, PREC_BIT_OR},
   [TOKEN_BIT_NOT] = {unary, NULL, PREC_UNARY},
   [TOKEN_XOR] = {NULL, binary, PREC_BIT_XOR},
   [TOKEN_LEFT_SHIFT] = {NULL, binary, PREC_SHIFT},
@@ -1039,7 +1095,7 @@ ParseRule rules[] = {
   [TOKEN_IS] = {NULL, binary, PREC_EQUALITY},
   [TOKEN_IN] = {NULL, binary, PREC_COMPARISON},
   [TOKEN_NULL] = {literal, NULL, PREC_NONE},
-  [TOKEN_OR] = {NULL, or_, PREC_OR},
+  [TOKEN_OR] = {lambdaEmpty, or_, PREC_OR},
   [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
   [TOKEN_SUPER] = {super_, NULL, PREC_NONE},
   [TOKEN_THIS] = {this_, NULL, PREC_NONE},
