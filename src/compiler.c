@@ -620,12 +620,38 @@ static void list(Compiler* compiler, bool canAssign) {
 	emitPair(compiler, OP_LIST, itemCount);
 }
 
+static void startLambda(Compiler* compiler, Compiler* functionCompiler) {
+	initCompiler(functionCompiler, compiler, TYPE_FUNCTION, compiler->vm, compiler->parser);
+	beginScope(functionCompiler);
+
+	functionCompiler->function->name = copyString(compiler->vm, "<lambda>", 8);
+}
+
+static void endLambda(Compiler* compiler, Compiler* functionCompiler) {
+	if (match(compiler, TOKEN_LEFT_BRACE)) {
+		block(functionCompiler);
+	}
+	else {
+		expression(functionCompiler);
+		emitByte(functionCompiler, OP_RETURN);
+	}
+
+	functionCompiler->vm = compiler->vm;
+	ObjFunction* function = endCompiler(functionCompiler);
+	emitByte(compiler, OP_CLOSURE);
+	encodeConstant(compiler, makeConstant(compiler, OBJ_VAL(function)));
+
+	for (size_t i = 0; i < function->upvalueCount; i++) {
+		emitByte(compiler, functionCompiler->upvalues[i].isLocal ? 1 : 0);
+		emitByte(compiler, functionCompiler->upvalues[i].index);
+	}
+
+	compiler->vm->compiler = compiler->enclosing;
+}
+
 static void lambda(Compiler* compiler, bool canAssign) {
 	Compiler functionCompiler;
-	initCompiler(&functionCompiler, compiler, TYPE_FUNCTION, compiler->vm, compiler->parser);
-	beginScope(&functionCompiler);
-
-	functionCompiler.function->name = copyString(compiler->vm, "<lambda>", 8);
+	startLambda(compiler, &functionCompiler);
 
 	if (!check(compiler, TOKEN_BIT_OR)) {
 		do {
@@ -640,25 +666,13 @@ static void lambda(Compiler* compiler, bool canAssign) {
 
 	consume(compiler, TOKEN_BIT_OR, "Expected '|' after parameters.");
 
-	if (match(compiler, TOKEN_LEFT_BRACE)) {
-		block(&functionCompiler);
-	}
-	else {
-		expression(&functionCompiler);
-		emitByte(&functionCompiler, OP_RETURN);
-	}
+	endLambda(compiler, &functionCompiler);
+}
 
-	functionCompiler.vm = compiler->vm;
-	ObjFunction* function = endCompiler(&functionCompiler);
-	emitByte(compiler, OP_CLOSURE);
-	encodeConstant(compiler, makeConstant(compiler, OBJ_VAL(function)));
-
-	for (size_t i = 0; i < function->upvalueCount; i++) {
-		emitByte(compiler, functionCompiler.upvalues[i].isLocal ? 1 : 0);
-		emitByte(compiler, functionCompiler.upvalues[i].index);
-	}
-
-	compiler->vm->compiler = compiler->enclosing;
+static void lambdaEmpty(Compiler* compiler, bool canAssign) {
+	Compiler functionCompiler;
+	startLambda(compiler, &functionCompiler);
+	endLambda(compiler, &functionCompiler);
 }
 
 static uint8_t argumentList(Compiler* compiler) {
@@ -1079,7 +1093,7 @@ ParseRule rules[] = {
   [TOKEN_IS] = {NULL, binary, PREC_EQUALITY},
   [TOKEN_IN] = {NULL, binary, PREC_COMPARISON},
   [TOKEN_NULL] = {literal, NULL, PREC_NONE},
-  [TOKEN_OR] = {NULL, or_, PREC_OR},
+  [TOKEN_OR] = {lambdaEmpty, or_, PREC_OR},
   [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
   [TOKEN_SUPER] = {super_, NULL, PREC_NONE},
   [TOKEN_THIS] = {this_, NULL, PREC_NONE},
