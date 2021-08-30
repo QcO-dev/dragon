@@ -135,15 +135,22 @@ ObjString* copyString(VM* vm, const char* chars, size_t length) {
 }
 
 ObjString* makeStringf(VM* vm, const char* format, ...) {
-	va_list vsnargs, vsargs;
-	va_start(vsnargs, format);
+	va_list args;
+	va_start(args, format);
+	ObjString* string = makeStringvf(vm, format, args);
+	va_end(args);
+	
+	return string;
+}
+
+ObjString* makeStringvf(VM* vm, const char* format, va_list vsnargs) {
+	va_list vsargs;
 	va_copy(vsargs, vsnargs);
 	int length = vsnprintf(NULL, 0, format, vsnargs);
 	va_end(vsnargs);
 	char* string = malloc((size_t)length + 1);
-	
+
 	vsprintf(string, format, vsargs);
-	va_end(vsargs);
 
 	return takeString(vm, string, length);
 }
@@ -206,8 +213,7 @@ ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError) {
 	if (tableGet(&instance->fields, copyString(vm, "toString", 8), &method)) {
 		Value stringForm = callDragonFromNative(vm, &OBJ_VAL(instance), method, 0, hasError);
 		if (!IS_STRING(stringForm)) { 
-			runtimeError(vm, "Instance's 'toString' method must return a string.");
-			*hasError = true;
+			*hasError = !throwException(vm, "TypeException", "Instance's 'toString' method must return a string.");
 			return NULL;
 		}
 		return AS_STRING(stringForm);
@@ -215,8 +221,7 @@ ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError) {
 	else if (tableGet(&instance->klass->methods, copyString(vm, "toString", 8), &method)) {
 		Value stringForm = callDragonFromNative(vm, &OBJ_VAL(instance), method, 0, hasError);
 		if (!IS_STRING(stringForm)) {
-			runtimeError(vm, "Instance's 'toString' method must return a string.");
-			*hasError = true;
+			*hasError = !throwException(vm, "TypeException", "Instance's 'toString' method must return a string.");
 			return NULL;
 		}
 		return AS_STRING(stringForm);
@@ -389,9 +394,8 @@ static Value hasPropertyNative(VM* vm, Value* bound, uint8_t argCount, Value* ar
 	Value propertyValue = args[0];
 
 	if (!IS_STRING(propertyValue)) {
-		runtimeError(vm, "Property name must be a string.");
-		*hasError = true;
-		return NULL_VAL;
+		*hasError = !throwException(vm, "TypeException", "Property name must be a string.");
+		return pop(vm);
 	}
 
 	ObjString* propertyName = AS_STRING(propertyValue);

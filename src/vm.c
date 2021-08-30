@@ -6,6 +6,7 @@
 #include "memory.h"
 #include "leb128.h"
 #include "natives.h"
+#include "exception.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -55,18 +56,21 @@ void initVM(VM* vm) {
 	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
 	defineGlobalNatives(vm);
 	defineObjectNatives(vm);
+	defineExceptionClasses(vm);
 }
 
 void freeVM(VM* vm) {
 	freeTable(vm, &vm->strings);
 	freeTable(vm, &vm->globals);
 	vm->constructorString = NULL;
-	freeObjects(vm);
 	vm->shouldGC = false;
 	FREE_ARRAY(vm, CallFrame, vm->frames, vm->frameSize);
 	FREE_ARRAY(vm, Value, vm->stack, vm->stackSize);
+	freeObjects(vm);
 	vm->shouldGC = true;
 }
+
+static void closeUpvalues(VM* vm, Value* last);
 
 void push(VM* vm, Value value) {
 	*vm->stackTop = value;
@@ -74,6 +78,7 @@ void push(VM* vm, Value value) {
 }
 
 Value pop(VM* vm) {
+	if (vm->stackTop == vm->stack) return NULL_VAL;
 	vm->stackTop--;
 	return *vm->stackTop;
 }
@@ -87,39 +92,46 @@ static Value peek(VM* vm, size_t distance) {
 	return vm->stackTop[-1 - distance];
 }
 
-void runtimeError(VM* vm, const char* format, ...) {
-	va_list args;
-	va_start(args, format);
-	vfprintf(stderr, format, args);
-	va_end(args);
-	fputs("\n", stderr);
+static bool throwGeneral(VM* vm, ObjInstance* throwee) {
+	CallFrame* frame = &vm->frames[vm->frameCount - 1];
+	ValueArray stackTrace;
+	initValueArray(&stackTrace);
+
+	Value message;
+	if (!tableGet(&throwee->fields, copyString(vm, "message", 7), &message)) {
+		message = NULL_VAL;
+	}
+
+	bool hasError = false;
+	ObjString* fullMessage = makeStringf(vm, "%s: %s", throwee->klass->name->chars, valueToString(vm, message, &hasError)->chars);
+	if (hasError) return false;
+
+	writeValueArray(vm, &stackTrace, OBJ_VAL(fullMessage));
 
 	size_t prevLine = 0;
 	ObjFunction* prevFunction = NULL;
 	size_t count = 0;
 	bool repeating = false;
 
-	for (size_t i = vm->frameCount; i > 0; i--) {
-		CallFrame* frame = &vm->frames[i - 1];
+	while (!frame->isTry) {
+		Value result = pop(vm);
+
+		closeUpvalues(vm, frame->slots);
+
+		// Add to stack trace
 		ObjFunction* function = frame->closure->function;
 		size_t instruction = frame->ip - function->chunk.code - 1;
-
 		size_t line = getLine(&function->chunk.lines, instruction);
-
 		if (line != prevLine || function != prevFunction) {
-			if (repeating == true) {
-				fprintf(stderr, "[Previous * %zu]\n", count);
+			ObjString* traceLine;
+			if (repeating) {
+				traceLine = makeStringf(vm, "[Previous * %zu]", count);
 				repeating = false;
 				count = 0;
+				writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
 			}
-			fprintf(stderr, "[%zu] in ", line);
-
-			if (function->name == NULL) {
-				fprintf(stderr, "<script>\n");
-			}
-			else {
-				fprintf(stderr, "%s\n", function->name->chars);
-			}
+			traceLine = makeStringf(vm, "[%d] in %s", line, function->name == NULL ? "<script>" : function->name->chars);
+			writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
 			prevFunction = function;
 			prevLine = line;
 		}
@@ -127,9 +139,65 @@ void runtimeError(VM* vm, const char* format, ...) {
 			repeating = true;
 			count++;
 		}
+
+
+		vm->frameCount--;
+		if (vm->frameCount == 0) {
+			pop(vm);
+
+			for (size_t i = 0; i < stackTrace.count; i++) {
+				printf("%s\n", AS_CSTRING(stackTrace.values[i]));
+			}
+			return false;
+		}
+		vm->stackTop = frame->slots;
+		push(vm, result);
+
+		frame = &vm->frames[vm->frameCount - 1];
+	}
+	// The last call
+	ObjFunction* function = frame->closure->function;
+	size_t instruction = frame->ip - function->chunk.code - 1;
+	size_t line = getLine(&function->chunk.lines, instruction);
+
+	ObjString* traceLine = makeStringf(vm, "[%d] in %s", line, function->name == NULL ? "<script>" : function->name->chars);
+	writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
+
+	ObjList* stackTraceList = newList(vm, stackTrace);
+	tableSet(vm, &throwee->fields, copyString(vm, "stackTrace", 10), OBJ_VAL(stackTraceList));
+
+	frame->isTry = false;
+	frame->ip = frame->catchJump;
+
+	return true;
+}
+
+bool throwException(VM* vm, const char* name, const char* format, ...) {
+	va_list args;
+	va_start(args, format);
+	ObjString* message = makeStringvf(vm, format, args);
+	va_end(args);
+	push(vm, OBJ_VAL(message));
+
+	ObjString* nameStr = copyString(vm, name, strlen(name));
+
+	Value value;
+	if (!tableGet(&vm->globals, nameStr, &value)) {
+		fprintf(stderr, "Expected '%s' to be available at global scope.", name);
+		return false;
+	}
+	if (!IS_CLASS(value)) {
+		fprintf(stderr, "Expected '%s' to be a class.", name);
+		return false;
 	}
 
-	resetStack(vm);
+	ObjInstance* instance = newInstance(vm, AS_CLASS(value));
+	push(vm, OBJ_VAL(instance));
+	tableSet(vm, &instance->fields, copyString(vm, "message", 7), OBJ_VAL(message));
+
+	popN(vm, 2);
+	push(vm, OBJ_VAL(instance));
+	return throwGeneral(vm, instance);
 }
 
 static ObjUpvalue* captureUpvalue(VM* vm, Value* local) {
@@ -170,8 +238,7 @@ static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
 	size_t expected = closure->function->arity;
 	if(argCount != expected) {
 		if (!closure->function->isLambda) {
-			runtimeError(vm, "Expected %u arguments but got %u.", closure->function->arity, argCount);
-			return false;
+			return throwException(vm, "ArityException","Expected %u arguments but got %u.", closure->function->arity, argCount);
 		}
 		if (argCount > expected) {
 			for (size_t i = argCount; i > closure->function->arity; i--) {
@@ -185,10 +252,8 @@ static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
 		}
 	}
 
-	
 	if (vm->frameCount == FRAMES_MAX) {
-		runtimeError(vm, "Stack overflow (Max frame: %d).", FRAMES_MAX);
-		return false;
+		return throwException(vm, "StackOverflowException", "Stack overflow (Max frame: %d).", FRAMES_MAX);
 	}
 
 	if (vm->frameCount + 1 >= vm->frameSize) {
@@ -208,6 +273,7 @@ static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
 	frame->closure = closure;
 	frame->ip = closure->function->chunk.code;
 	frame->slots = vm->stackTop - expected - 1;
+	frame->isTry = false;
 	return true;
 }
 
@@ -227,8 +293,9 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 					return call(vm, AS_CLOSURE(initializer), argCount);
 				}
 				else if (argCount != 0) {
-					runtimeError(vm, "Expected 0 arguments but got %u.", argCount);
-					return false;
+					pop(vm);
+					pop(vm);
+					return throwException(vm, "ArityException", "Expected 0 arguments but got %u.", argCount);
 				}
 				return true;
 			}
@@ -238,8 +305,8 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				ObjNative* native = AS_NATIVE(callee);
 
 				if (argCount != native->arity) {
-					runtimeError(vm, "Expected %zu argument(s) but got %u.", native->arity, argCount);
-					return false;
+					pop(vm);
+					return throwException(vm, "ArityException", "Expected %zu argument(s) but got %u.", native->arity, argCount);
 				}
 
 				NativeFn nativeFunction = native->function;
@@ -254,8 +321,8 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				break; // Non-callable object.
 		}
 	}
-	runtimeError(vm, "Can only call functions or classes.");
-	return false;
+	pop(vm);
+	return throwException(vm, "TypeException", "Can only call functions or classes.");
 }
 
 static void defineMethod(VM* vm, ObjString* name) {
@@ -268,8 +335,7 @@ static void defineMethod(VM* vm, ObjString* name) {
 static bool bindMethod(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString* name) {
 	Value method;
 	if (!tableGet(&klass->methods, name, &method)) {
-		runtimeError(vm, "Undefined property '%s'.", name->chars);
-		return false;
+		return throwException(vm, "PropertyException", "Undefined property '%s'.", name->chars);
 	}
 	
 	Obj* bound = NULL;
@@ -277,10 +343,10 @@ static bool bindMethod(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString
 		ObjNative* native = AS_NATIVE(method);
 		native->isBound = true;
 		native->bound = OBJ_VAL(instance);
-		bound = native;
+		bound = (Obj*)native;
 	}
 	else {
-		bound = newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
+		bound = (Obj*)newBoundMethod(vm, peek(vm, 0), AS_CLOSURE(method));
 	}
 
 	pop(vm);
@@ -291,8 +357,9 @@ static bool bindMethod(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString
 static bool invokeFromClass(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString* name, uint8_t argCount) {
 	Value method;
 	if (!tableGet(&klass->methods, name, &method)) {
-		runtimeError(vm, "Undefined property '%s'.", name->chars);
-		return false;
+		pop(vm);
+		pop(vm);
+		return throwException(vm, "PropertyException", "Undefined property '%s'.", name->chars);
 	}
 
 	if (IS_NATIVE(method)) {
@@ -309,8 +376,7 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 	Value receiver = peek(vm, argCount);
 
 	if (!IS_INSTANCE(receiver)) {
-		runtimeError(vm, "Only instances contain methods.");
-		return false;
+		return throwException(vm, "TypeException", "Only instances contain methods.");
 	}
 
 	ObjInstance* instance = AS_INSTANCE(receiver);
@@ -318,7 +384,6 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 	Value value;
 	if (tableGet(&instance->fields, name, &value)) {
 		vm->stackTop[-argCount - 1] = value;
-		// TODO HERE
 		return callValue(vm, value, argCount);
 	}
 
@@ -375,13 +440,11 @@ static inline bool isInteger(double value) {
 
 static bool validateListIndex(VM* vm, ObjList* list, Value indexVal, uintmax_t* dest) {
 	if (!IS_NUMBER(indexVal)) {
-		runtimeError(vm, "List index must be a number.");
-		return false;
+		return throwException(vm, "TypeException", "List index must be a number.");
 	}
 	double indexNum = AS_NUMBER(indexVal);
 	if (!isInteger(indexNum)) {
-		runtimeError(vm, "List index must be an integer.");
-		return false;
+		return throwException(vm, "TypeException", "List index must be an integer.");
 	}
 	intmax_t indexSigned = (intmax_t)indexNum;
 	size_t listLength = list->items.count;
@@ -392,8 +455,7 @@ static bool validateListIndex(VM* vm, ObjList* list, Value indexVal, uintmax_t* 
 	}
 
 	if (index >= listLength) {
-		runtimeError(vm, "Index %d is out of bounds for list of length %d.", indexSigned, listLength);
-		return false;
+		return throwException(vm, "IndexException", "Index %d is out of bounds for list of length %d.", indexSigned, listLength);
 	}
 	*dest = index;
 	return true;
@@ -409,8 +471,10 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 #define BINARY_OP(valueType, op) \
 	do { \
 		if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
-			runtimeError(vm, "Operands must be numbers."); \
-			return INTERPRETER_RUNTIME_ERR; \
+			pop(vm); \
+			pop(vm); \
+			if(!throwException(vm, "TypeException", "Operands must be numbers.")) return INTERPRETER_RUNTIME_ERR; \
+			break; \
 		} \
 		double b = AS_NUMBER(pop(vm)); \
 		double a = AS_NUMBER(pop(vm)); \
@@ -420,14 +484,16 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 #define BITWISE_BINARY_OP(op) \
 	do { \
 		if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
-			runtimeError(vm, "Operands must be numbers."); \
-			return INTERPRETER_RUNTIME_ERR; \
+			pop(vm); \
+			pop(vm); \
+			if(!throwException(vm, "TypeException", "Operands must be numbers.")) return INTERPRETER_RUNTIME_ERR; \
+			break; \
 		} \
 		double b = AS_NUMBER(pop(vm)); \
 		double a = AS_NUMBER(pop(vm)); \
 		if (!isInteger(a) || !isInteger(b)) { \
-			runtimeError(vm, "Operands must be integers."); \
-			return INTERPRETER_RUNTIME_ERR; \
+			if(!throwException(vm, "TypeException", "Operands must be integers.")) return INTERPRETER_RUNTIME_ERR; \
+			break; \
 		} \
 		intmax_t aInt = (intmax_t)a; \
 		intmax_t bInt = (intmax_t)b; \
@@ -467,8 +533,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			ObjString* name = READ_STRING();
 			Value value;
 			if (!tableGet(&vm->globals, name, &value)) {
-				runtimeError(vm, "Undefined variable '%s'.", name->chars);
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "UndefinedVariableException", "Undefined variable '%s'.", name->chars)) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			push(vm, value);
 			break;
@@ -485,8 +551,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			ObjString* name = READ_STRING();
 			if (tableSet(vm, &vm->globals, name, peek(vm, 0))) {
 				tableDelete(&vm->globals, name);
-				runtimeError(vm, "Undefined variable '%s'.", name->chars);
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "UndefinedVariableException", "Undefined variable '%s'.", name->chars)) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			break;
 		}
@@ -523,8 +589,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_GET_PROPERTY: {
 			if (!IS_INSTANCE(peek(vm, 0))) {
-				runtimeError(vm, "Only instances contain properties.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Only instances contain properties.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			ObjInstance* instance = AS_INSTANCE(peek(vm, 0));
 			ObjString* name = READ_STRING();
@@ -543,8 +609,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_SET_PROPERTY: {
 			if (!IS_INSTANCE(peek(vm, 1))) {
-				runtimeError(vm, "Only instances contain fields.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Only instances contain fields.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
 			tableSet(vm, &instance->fields, READ_STRING(), peek(vm, 0));
@@ -556,8 +622,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_SET_PROPERTY_KV: {
 			if (!IS_INSTANCE(peek(vm, 1))) {
-				runtimeError(vm, "Only instances contain fields.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Only instances contain fields.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
 			tableSet(vm, &instance->fields, READ_STRING(), peek(vm, 0));
@@ -583,8 +649,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjInstance* instance = AS_INSTANCE(pop(vm));
 
 				if (!IS_STRING(indexVal)) {
-					runtimeError(vm, "Field name must be a string.");
-					return INTERPRETER_RUNTIME_ERR;
+					if (!throwException(vm, "TypeException", "Field name must be a string.")) return INTERPRETER_RUNTIME_ERR;
+					break;
 				}
 
 				ObjString* key = AS_STRING(indexVal);
@@ -597,8 +663,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, value);
 				break;
 			}
-			runtimeError(vm, "Can only index into lists.");
-			return INTERPRETER_RUNTIME_ERR;
+			if (!throwException(vm, "TypeException", "Can only index into lists.")) return INTERPRETER_RUNTIME_ERR;
+			break;
 		}
 
 		case OP_SET_INDEX: {
@@ -622,8 +688,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjInstance* instance = AS_INSTANCE(peek(vm, 2));
 
 				if (!IS_STRING(indexVal)) {
-					runtimeError(vm, "Field name must be a string.");
-					return INTERPRETER_RUNTIME_ERR;
+					if (!throwException(vm, "TypeException", "Field name must be a string.")) return INTERPRETER_RUNTIME_ERR;
+					break;
 				}
 
 				ObjString* key = AS_STRING(indexVal);
@@ -634,8 +700,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, value);
 				break;
 			}
-			runtimeError(vm, "Can only index into lists.");
-			return INTERPRETER_RUNTIME_ERR;
+			if (!throwException(vm, "TypeException", "Can only index into lists.")) return INTERPRETER_RUNTIME_ERR;
+			break;
 		}
 
 		case OP_GET_SUPER: {
@@ -656,8 +722,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_NEGATE:
 			if (!IS_NUMBER(peek(vm, 0))) {
-				runtimeError(vm, "Operand must be a number.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operand must be a number.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			push(vm, NUMBER_VAL(-AS_NUMBER(pop(vm))));
 			break;
@@ -688,8 +754,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, NUMBER_VAL(a + b));
 			}
 			else {
-				runtimeError(vm, "Operands are invalid for + operation.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operands are invalid for '+' operation.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			break;
 		}
@@ -699,13 +765,13 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_BIT_NOT: {
 			if (!IS_NUMBER(peek(vm, 0))) {
-				runtimeError(vm, "Operand must be a number.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operand must be a number.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			double value = AS_NUMBER(pop(vm));
 			if (!isInteger(value)) {
-				runtimeError(vm, "Operand must be an integer.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operand must be an integer.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			intmax_t valInt = (intmax_t)value;
 			push(vm, NUMBER_VAL((double)~valInt));
@@ -719,18 +785,18 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		case OP_ASH: BITWISE_BINARY_OP(>> ); break;
 		case OP_RSH: {
 			if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {
-				runtimeError(vm, "Operands must be numbers.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operands must be numbers.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			double b = AS_NUMBER(pop(vm));
 			double a = AS_NUMBER(pop(vm));
 			if (!isInteger(a) || !isInteger(b)) {
-				runtimeError(vm, "Operands must be integers.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operands must be integers.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			uintmax_t aInt = (uintmax_t)a;
 			uintmax_t bInt = (uintmax_t)b;
-			push(vm, NUMBER_VAL(aInt >> bInt));
+			push(vm, NUMBER_VAL((double)(aInt >> bInt)));
 			break;
 		}
 
@@ -781,8 +847,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjInstance* instance = AS_INSTANCE(b);
 
 				if (!IS_STRING(a)) {
-					runtimeError(vm, "Field name must be a string.");
-					return INTERPRETER_RUNTIME_ERR;
+					if (!throwException(vm, "TypeException", "Field name must be a string.")) return INTERPRETER_RUNTIME_ERR;
+					break;
 				}
 
 				ObjString* key = AS_STRING(a);
@@ -795,8 +861,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjString* string = AS_STRING(b);
 
 				if (!IS_STRING(a)) {
-					runtimeError(vm, "Substring must be a string.");
-					return INTERPRETER_RUNTIME_ERR;
+					if (!throwException(vm, "TypeException", "Substring must be a string.")) return INTERPRETER_RUNTIME_ERR;
+					break;
 				}
 
 				ObjString* substring = AS_STRING(a);
@@ -805,8 +871,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				break;
 			}
 
-			runtimeError(vm, "Can only use 'in' on strings, lists and instances");
-			return INTERPRETER_RUNTIME_ERR;
+			if (!throwException(vm, "TypeException", "Can only use 'in' on strings, lists, and instances.")) return INTERPRETER_RUNTIME_ERR;
+			break;
 		}
 
 		case OP_JUMP_IF_FALSE: {
@@ -865,8 +931,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		case OP_INHERIT: {
 			Value superclass = peek(vm, 1);
 			if (!IS_CLASS(superclass)) {
-				runtimeError(vm, "Superclass must be a class.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Superclass must be a class.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			ObjClass* subclass = AS_CLASS(peek(vm, 0));
 			tableAddAll(vm, &AS_CLASS(superclass)->methods, &subclass->methods);
@@ -894,6 +960,35 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			if (!invokeFromClass(vm, AS_INSTANCE(frame->slots[0]), superclass, method, argCount)) {
 				return INTERPRETER_RUNTIME_ERR;
 			}
+			break;
+		}
+
+		case OP_THROW: {
+			Value throwee = peek(vm, 0);
+
+			if (!IS_INSTANCE(throwee)) {
+				if (!throwException(vm, "TypeException", "Throwee must be an instance.")) return INTERPRETER_RUNTIME_ERR;
+				break;
+			}
+
+			ObjInstance* instance = AS_INSTANCE(throwee);
+
+			if (!throwGeneral(vm, instance)) return INTERPRETER_RUNTIME_ERR;
+
+			break;
+		}
+
+		case OP_TRY_BEGIN: {
+			uint16_t catchLocation = READ_SHORT();
+
+			frame->isTry = true;
+			frame->catchJump = frame->ip + catchLocation;
+
+			break;
+		}
+
+		case OP_TRY_END: {
+			frame->isTry = false;
 			break;
 		}
 
