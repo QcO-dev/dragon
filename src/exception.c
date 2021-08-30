@@ -22,4 +22,9 @@ void defineExceptionClasses(VM* vm) {
 
 
 	defineException(vm, exception, "TypeException");
+	defineException(vm, exception, "ArityException");
+	defineException(vm, exception, "PropertyException");
+	defineException(vm, exception, "IndexException");
+	defineException(vm, exception, "UndefinedVariableException");
+	defineException(vm, exception, "StackOverflowException");
 }

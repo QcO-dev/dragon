@@ -172,10 +172,9 @@ static bool throwGeneral(VM* vm, ObjInstance* throwee) {
 				traceLine = makeStringf(vm, "[Previous * %zu]", count);
 				repeating = false;
 				count = 0;
+				writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
 			}
-			else { 
-				traceLine = makeStringf(vm, "[%d] in %s", line, function->name == NULL ? "<script>" : function->name->chars);
-			}
+			traceLine = makeStringf(vm, "[%d] in %s", line, function->name == NULL ? "<script>" : function->name->chars);
 			writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
 			prevFunction = function;
 			prevLine = line;
@@ -283,8 +282,7 @@ static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
 	size_t expected = closure->function->arity;
 	if(argCount != expected) {
 		if (!closure->function->isLambda) {
-			runtimeError(vm, "Expected %u arguments but got %u.", closure->function->arity, argCount);
-			return false;
+			return throwException(vm, "ArityException","Expected %u arguments but got %u.", closure->function->arity, argCount);
 		}
 		if (argCount > expected) {
 			for (size_t i = argCount; i > closure->function->arity; i--) {
@@ -298,10 +296,8 @@ static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
 		}
 	}
 
-	
 	if (vm->frameCount == FRAMES_MAX) {
-		runtimeError(vm, "Stack overflow (Max frame: %d).", FRAMES_MAX);
-		return false;
+		return throwException(vm, "StackOverflowException", "Stack overflow (Max frame: %d).", FRAMES_MAX);
 	}
 
 	if (vm->frameCount + 1 >= vm->frameSize) {
@@ -341,8 +337,7 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 					return call(vm, AS_CLOSURE(initializer), argCount);
 				}
 				else if (argCount != 0) {
-					runtimeError(vm, "Expected 0 arguments but got %u.", argCount);
-					return false;
+					return throwException(vm, "ArityException", "Expected 0 arguments but got %u.", argCount);
 				}
 				return true;
 			}
@@ -352,8 +347,7 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				ObjNative* native = AS_NATIVE(callee);
 
 				if (argCount != native->arity) {
-					runtimeError(vm, "Expected %zu argument(s) but got %u.", native->arity, argCount);
-					return false;
+					return throwException(vm, "ArityException", "Expected %zu argument(s) but got %u.", native->arity, argCount);
 				}
 
 				NativeFn nativeFunction = native->function;
@@ -368,8 +362,7 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				break; // Non-callable object.
 		}
 	}
-	runtimeError(vm, "Can only call functions or classes.");
-	return false;
+	return throwException(vm, "TypeException", "Can only call functions or classes.");
 }
 
 static void defineMethod(VM* vm, ObjString* name) {
@@ -382,8 +375,7 @@ static void defineMethod(VM* vm, ObjString* name) {
 static bool bindMethod(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString* name) {
 	Value method;
 	if (!tableGet(&klass->methods, name, &method)) {
-		runtimeError(vm, "Undefined property '%s'.", name->chars);
-		return false;
+		return throwException(vm, "PropertyException", "Undefined property '%s'.", name->chars);
 	}
 	
 	Obj* bound = NULL;
@@ -405,8 +397,7 @@ static bool bindMethod(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString
 static bool invokeFromClass(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString* name, uint8_t argCount) {
 	Value method;
 	if (!tableGet(&klass->methods, name, &method)) {
-		runtimeError(vm, "Undefined property '%s'.", name->chars);
-		return false;
+		return throwException(vm, "PropertyException", "Undefined property '%s'.", name->chars);
 	}
 
 	if (IS_NATIVE(method)) {
@@ -423,8 +414,7 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 	Value receiver = peek(vm, argCount);
 
 	if (!IS_INSTANCE(receiver)) {
-		runtimeError(vm, "Only instances contain methods.");
-		return false;
+		return throwException(vm, "TypeException", "Only instances contain methods.");
 	}
 
 	ObjInstance* instance = AS_INSTANCE(receiver);
@@ -432,7 +422,6 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 	Value value;
 	if (tableGet(&instance->fields, name, &value)) {
 		vm->stackTop[-argCount - 1] = value;
-		// TODO HERE
 		return callValue(vm, value, argCount);
 	}
 
@@ -489,13 +478,11 @@ static inline bool isInteger(double value) {
 
 static bool validateListIndex(VM* vm, ObjList* list, Value indexVal, uintmax_t* dest) {
 	if (!IS_NUMBER(indexVal)) {
-		runtimeError(vm, "List index must be a number.");
-		return false;
+		return throwException(vm, "TypeException", "List index must be a number.");
 	}
 	double indexNum = AS_NUMBER(indexVal);
 	if (!isInteger(indexNum)) {
-		runtimeError(vm, "List index must be an integer.");
-		return false;
+		return throwException(vm, "TypeException", "List index must be an integer.");
 	}
 	intmax_t indexSigned = (intmax_t)indexNum;
 	size_t listLength = list->items.count;
@@ -506,8 +493,7 @@ static bool validateListIndex(VM* vm, ObjList* list, Value indexVal, uintmax_t* 
 	}
 
 	if (index >= listLength) {
-		runtimeError(vm, "Index %d is out of bounds for list of length %d.", indexSigned, listLength);
-		return false;
+		return throwException(vm, "IndexException", "Index %d is out of bounds for list of length %d.", indexSigned, listLength);
 	}
 	*dest = index;
 	return true;
@@ -585,8 +571,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			ObjString* name = READ_STRING();
 			Value value;
 			if (!tableGet(&vm->globals, name, &value)) {
-				runtimeError(vm, "Undefined variable '%s'.", name->chars);
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "UndefinedVariableException", "Undefined variable '%s'.", name->chars)) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			push(vm, value);
 			break;
@@ -603,8 +589,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			ObjString* name = READ_STRING();
 			if (tableSet(vm, &vm->globals, name, peek(vm, 0))) {
 				tableDelete(&vm->globals, name);
-				runtimeError(vm, "Undefined variable '%s'.", name->chars);
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "UndefinedVariableException", "Undefined variable '%s'.", name->chars)) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			break;
 		}
@@ -641,8 +627,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_GET_PROPERTY: {
 			if (!IS_INSTANCE(peek(vm, 0))) {
-				runtimeError(vm, "Only instances contain properties.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Only instances contain properties.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			ObjInstance* instance = AS_INSTANCE(peek(vm, 0));
 			ObjString* name = READ_STRING();
@@ -661,8 +647,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_SET_PROPERTY: {
 			if (!IS_INSTANCE(peek(vm, 1))) {
-				runtimeError(vm, "Only instances contain fields.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Only instances contain fields.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
 			tableSet(vm, &instance->fields, READ_STRING(), peek(vm, 0));
@@ -674,8 +660,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_SET_PROPERTY_KV: {
 			if (!IS_INSTANCE(peek(vm, 1))) {
-				runtimeError(vm, "Only instances contain fields.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Only instances contain fields.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			ObjInstance* instance = AS_INSTANCE(peek(vm, 1));
 			tableSet(vm, &instance->fields, READ_STRING(), peek(vm, 0));
@@ -701,8 +687,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjInstance* instance = AS_INSTANCE(pop(vm));
 
 				if (!IS_STRING(indexVal)) {
-					runtimeError(vm, "Field name must be a string.");
-					return INTERPRETER_RUNTIME_ERR;
+					if (!throwException(vm, "TypeException", "Field name must be a string.")) return INTERPRETER_RUNTIME_ERR;
+					break;
 				}
 
 				ObjString* key = AS_STRING(indexVal);
@@ -715,8 +701,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, value);
 				break;
 			}
-			runtimeError(vm, "Can only index into lists.");
-			return INTERPRETER_RUNTIME_ERR;
+			if (!throwException(vm, "TypeException", "Can only index into lists.")) return INTERPRETER_RUNTIME_ERR;
+			break;
 		}
 
 		case OP_SET_INDEX: {
@@ -740,8 +726,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjInstance* instance = AS_INSTANCE(peek(vm, 2));
 
 				if (!IS_STRING(indexVal)) {
-					runtimeError(vm, "Field name must be a string.");
-					return INTERPRETER_RUNTIME_ERR;
+					if (!throwException(vm, "TypeException", "Field name must be a string.")) return INTERPRETER_RUNTIME_ERR;
+					break;
 				}
 
 				ObjString* key = AS_STRING(indexVal);
@@ -752,8 +738,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, value);
 				break;
 			}
-			runtimeError(vm, "Can only index into lists.");
-			return INTERPRETER_RUNTIME_ERR;
+			if (!throwException(vm, "TypeException", "Can only index into lists.")) return INTERPRETER_RUNTIME_ERR;
+			break;
 		}
 
 		case OP_GET_SUPER: {
@@ -774,8 +760,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_NEGATE:
 			if (!IS_NUMBER(peek(vm, 0))) {
-				runtimeError(vm, "Operand must be a number.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operand must be a number.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			push(vm, NUMBER_VAL(-AS_NUMBER(pop(vm))));
 			break;
@@ -806,8 +792,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, NUMBER_VAL(a + b));
 			}
 			else {
-				runtimeError(vm, "Operands are invalid for + operation.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operands are invalid for '+' operation.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			break;
 		}
@@ -817,13 +803,13 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_BIT_NOT: {
 			if (!IS_NUMBER(peek(vm, 0))) {
-				runtimeError(vm, "Operand must be a number.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operand must be a number.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			double value = AS_NUMBER(pop(vm));
 			if (!isInteger(value)) {
-				runtimeError(vm, "Operand must be an integer.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operand must be an integer.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			intmax_t valInt = (intmax_t)value;
 			push(vm, NUMBER_VAL((double)~valInt));
@@ -837,14 +823,14 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		case OP_ASH: BITWISE_BINARY_OP(>> ); break;
 		case OP_RSH: {
 			if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {
-				runtimeError(vm, "Operands must be numbers.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operands must be numbers.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			double b = AS_NUMBER(pop(vm));
 			double a = AS_NUMBER(pop(vm));
 			if (!isInteger(a) || !isInteger(b)) {
-				runtimeError(vm, "Operands must be integers.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Operands must be integers.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			uintmax_t aInt = (uintmax_t)a;
 			uintmax_t bInt = (uintmax_t)b;
@@ -899,8 +885,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjInstance* instance = AS_INSTANCE(b);
 
 				if (!IS_STRING(a)) {
-					runtimeError(vm, "Field name must be a string.");
-					return INTERPRETER_RUNTIME_ERR;
+					if (!throwException(vm, "TypeException", "Field name must be a string.")) return INTERPRETER_RUNTIME_ERR;
+					break;
 				}
 
 				ObjString* key = AS_STRING(a);
@@ -913,8 +899,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjString* string = AS_STRING(b);
 
 				if (!IS_STRING(a)) {
-					runtimeError(vm, "Substring must be a string.");
-					return INTERPRETER_RUNTIME_ERR;
+					if (!throwException(vm, "TypeException", "Substring must be a string.")) return INTERPRETER_RUNTIME_ERR;
+					break;
 				}
 
 				ObjString* substring = AS_STRING(a);
@@ -923,8 +909,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				break;
 			}
 
-			runtimeError(vm, "Can only use 'in' on strings, lists and instances");
-			return INTERPRETER_RUNTIME_ERR;
+			if (!throwException(vm, "TypeException", "Can only use 'in' on strings, lists, and instances.")) return INTERPRETER_RUNTIME_ERR;
+			break;
 		}
 
 		case OP_JUMP_IF_FALSE: {
@@ -983,8 +969,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		case OP_INHERIT: {
 			Value superclass = peek(vm, 1);
 			if (!IS_CLASS(superclass)) {
-				runtimeError(vm, "Superclass must be a class.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Superclass must be a class.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 			ObjClass* subclass = AS_CLASS(peek(vm, 0));
 			tableAddAll(vm, &AS_CLASS(superclass)->methods, &subclass->methods);
@@ -1019,8 +1005,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			Value throwee = peek(vm, 0);
 
 			if (!IS_INSTANCE(throwee)) {
-				runtimeError(vm, "Throwee must be an instance.");
-				return INTERPRETER_RUNTIME_ERR;
+				if (!throwException(vm, "TypeException", "Throwee must be an instance.")) return INTERPRETER_RUNTIME_ERR;
+				break;
 			}
 
 			ObjInstance* instance = AS_INSTANCE(throwee);
