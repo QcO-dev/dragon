@@ -438,7 +438,7 @@ static inline bool isInteger(double value) {
 	return floor(value) == value;
 }
 
-static bool validateListIndex(VM* vm, ObjList* list, Value indexVal, uintmax_t* dest) {
+static bool validateListIndex(VM* vm, size_t listLength, Value indexVal, uintmax_t* dest) {
 	if (!IS_NUMBER(indexVal)) {
 		return throwException(vm, "TypeException", "List index must be a number.");
 	}
@@ -447,7 +447,6 @@ static bool validateListIndex(VM* vm, ObjList* list, Value indexVal, uintmax_t* 
 		return throwException(vm, "TypeException", "List index must be an integer.");
 	}
 	intmax_t indexSigned = (intmax_t)indexNum;
-	size_t listLength = list->items.count;
 	uintmax_t index = indexSigned;
 
 	if (indexSigned < 0) {
@@ -637,11 +636,23 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjList* list = AS_LIST(pop(vm));
 
 				uintmax_t index;
-				if (!validateListIndex(vm, list, indexVal, &index)) {
+				if (!validateListIndex(vm, list->items.count, indexVal, &index)) {
 					return INTERPRETER_RUNTIME_ERR;
 				}
 
 				push(vm, list->items.values[index]);
+				break;
+			}
+			else if (IS_STRING(peek(vm, 1))) {
+				Value indexVal = pop(vm);
+				ObjString* string = AS_STRING(pop(vm));
+
+				uintmax_t index;
+				if (!validateListIndex(vm, string->length, indexVal, &index)) {
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				push(vm, OBJ_VAL(copyString(vm, &string->chars[index], 1)));
 				break;
 			}
 			else if (IS_INSTANCE(peek(vm, 1))) {
@@ -674,7 +685,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjList* list = AS_LIST(pop(vm));
 
 				uintmax_t index;
-				if (!validateListIndex(vm, list, indexVal, &index)) {
+				if (!validateListIndex(vm, list->items.count, indexVal, &index)) {
 					return INTERPRETER_RUNTIME_ERR;
 				}
 
