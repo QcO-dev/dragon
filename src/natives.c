@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <math.h>
+#include <string.h>
 
 static Value clockNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
@@ -29,9 +30,8 @@ static Value reprNative(VM* vm, Value* bound, uint8_t argCount, Value* args, boo
 
 static Value sqrtNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	if (!IS_NUMBER(args[0])) {
-		runtimeError(vm, "Expected number as first argument to sqrt.");
-		*hasError = true;
-		return NULL_VAL;
+		*hasError = !throwException(vm, "TypeException", "Expected number as first argument to sqrt.");
+		return (*hasError) ? NULL_VAL : pop(vm);
 	}
 	return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
 }
@@ -73,9 +73,8 @@ Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, 
 	else {
 		ObjNative* native = AS_NATIVE(callee);
 		if (argCount != native->arity) {
-			runtimeError(vm, "Expected %zu argument(s) but got %u.", native->arity, argCount);
-			*hasError = true;
-			return NULL_VAL;
+			*hasError = !throwException(vm, "ArityException", "Expected %zu argument(s) but got %u.", native->arity, argCount);
+			return pop(vm);
 		}
 
 		bool functionErr = false;

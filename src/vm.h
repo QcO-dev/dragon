@@ -46,7 +46,7 @@ typedef enum {
 void initVM(VM* vm);
 void freeVM(VM* vm);
 InterpreterResult interpret(VM* vm, const char* source);
-void runtimeError(VM* vm, const char* format, ...);
+bool throwException(VM* vm, const char* name, const char* format, ...);
 bool callValue(VM* vm, Value callee, uint8_t argCount);
 Value runFunction(VM* vm, bool* hasError);
 void push(VM* vm, Value value);

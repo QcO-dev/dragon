@@ -63,10 +63,10 @@ void freeVM(VM* vm) {
 	freeTable(vm, &vm->strings);
 	freeTable(vm, &vm->globals);
 	vm->constructorString = NULL;
-	freeObjects(vm);
 	vm->shouldGC = false;
 	FREE_ARRAY(vm, CallFrame, vm->frames, vm->frameSize);
 	FREE_ARRAY(vm, Value, vm->stack, vm->stackSize);
+	freeObjects(vm);
 	vm->shouldGC = true;
 }
 
@@ -78,6 +78,7 @@ void push(VM* vm, Value value) {
 }
 
 Value pop(VM* vm) {
+	if (vm->stackTop == vm->stack) return NULL_VAL;
 	vm->stackTop--;
 	return *vm->stackTop;
 }
@@ -89,51 +90,6 @@ Value popN(VM* vm, size_t count) {
 
 static Value peek(VM* vm, size_t distance) {
 	return vm->stackTop[-1 - distance];
-}
-
-void runtimeError(VM* vm, const char* format, ...) {
-	va_list args;
-	va_start(args, format);
-	vfprintf(stderr, format, args);
-	va_end(args);
-	fputs("\n", stderr);
-
-	size_t prevLine = 0;
-	ObjFunction* prevFunction = NULL;
-	size_t count = 0;
-	bool repeating = false;
-
-	for (size_t i = vm->frameCount; i > 0; i--) {
-		CallFrame* frame = &vm->frames[i - 1];
-		ObjFunction* function = frame->closure->function;
-		size_t instruction = frame->ip - function->chunk.code - 1;
-
-		size_t line = getLine(&function->chunk.lines, instruction);
-
-		if (line != prevLine || function != prevFunction) {
-			if (repeating == true) {
-				fprintf(stderr, "[Previous * %zu]\n", count);
-				repeating = false;
-				count = 0;
-			}
-			fprintf(stderr, "[%zu] in ", line);
-
-			if (function->name == NULL) {
-				fprintf(stderr, "<script>\n");
-			}
-			else {
-				fprintf(stderr, "%s\n", function->name->chars);
-			}
-			prevFunction = function;
-			prevLine = line;
-		}
-		else {
-			repeating = true;
-			count++;
-		}
-	}
-
-	resetStack(vm);
 }
 
 static bool throwGeneral(VM* vm, ObjInstance* throwee) {
@@ -216,7 +172,7 @@ static bool throwGeneral(VM* vm, ObjInstance* throwee) {
 	return true;
 }
 
-static bool throwException(VM* vm, const char* name, const char* format, ...) {
+bool throwException(VM* vm, const char* name, const char* format, ...) {
 	va_list args;
 	va_start(args, format);
 	ObjString* message = makeStringvf(vm, format, args);
@@ -337,6 +293,8 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 					return call(vm, AS_CLOSURE(initializer), argCount);
 				}
 				else if (argCount != 0) {
+					pop(vm);
+					pop(vm);
 					return throwException(vm, "ArityException", "Expected 0 arguments but got %u.", argCount);
 				}
 				return true;
@@ -347,6 +305,7 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				ObjNative* native = AS_NATIVE(callee);
 
 				if (argCount != native->arity) {
+					pop(vm);
 					return throwException(vm, "ArityException", "Expected %zu argument(s) but got %u.", native->arity, argCount);
 				}
 
@@ -362,6 +321,7 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				break; // Non-callable object.
 		}
 	}
+	pop(vm);
 	return throwException(vm, "TypeException", "Can only call functions or classes.");
 }
 
@@ -397,6 +357,8 @@ static bool bindMethod(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString
 static bool invokeFromClass(VM* vm, ObjInstance* instance, ObjClass* klass, ObjString* name, uint8_t argCount) {
 	Value method;
 	if (!tableGet(&klass->methods, name, &method)) {
+		pop(vm);
+		pop(vm);
 		return throwException(vm, "PropertyException", "Undefined property '%s'.", name->chars);
 	}
 
