@@ -69,6 +69,19 @@ static void skipWhitespace(Scanner* scanner) {
 				if (peekNext(scanner) == '/') {
 					while (peek(scanner) != '\n' && !isAtEnd(scanner)) advance(scanner);
 				}
+				else if (peekNext(scanner) == '*') {
+					advance(scanner);
+
+					while (!isAtEnd(scanner)) {
+						if (match(scanner, '*') && match(scanner, '/')) {
+							break;
+						}
+						else if (peek(scanner, '\n')) {
+							scanner->line++;
+						}
+						advance(scanner);
+					}
+				}
 				else {
 					return;
 				}
