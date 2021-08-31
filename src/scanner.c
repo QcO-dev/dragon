@@ -174,7 +174,13 @@ static TokenType identifierType(Scanner* scanner) {
 			break;
 		case 'n': return checkKeyword(scanner, 1, 3, "ull", TOKEN_NULL);
 		case 'r': return checkKeyword(scanner, 1, 5, "eturn", TOKEN_RETURN);
-		case 's': return checkKeyword(scanner, 1, 4, "uper", TOKEN_SUPER);
+		case 's':
+			if (scanner->current - scanner->start > 1) {
+				switch (scanner->start[1]) {
+					case 'u': return checkKeyword(scanner, 2, 3, "per", TOKEN_SUPER);
+					case 'w': return checkKeyword(scanner, 2, 4, "itch", TOKEN_SWITCH);
+				}
+			}
 		case 't':
 			if (scanner->current - scanner->start > 1) {
 				switch(scanner->start[1]) {
@@ -230,7 +236,6 @@ Token scanToken(Scanner* scanner) {
 		case ';': return makeToken(scanner, TOKEN_SEMICOLON);
 		case ',': return makeToken(scanner, TOKEN_COMMA);
 		case '.': return makeToken(scanner, TOKEN_DOT);
-		case '-': return makeToken(scanner, TOKEN_MINUS);
 		case '+': return makeToken(scanner, TOKEN_PLUS);
 		case '/': return makeToken(scanner, TOKEN_SLASH);
 		case '*': return makeToken(scanner, TOKEN_STAR);
@@ -238,6 +243,7 @@ Token scanToken(Scanner* scanner) {
 		case '^': return makeToken(scanner, TOKEN_XOR);
 		case '~': return makeToken(scanner, TOKEN_BIT_NOT);
 		case ':': return makeToken(scanner, TOKEN_COLON);
+		case '-': return makeToken(scanner, match(scanner, '>') ? TOKEN_ARROW : TOKEN_MINUS);
 		case '!': return makeToken(scanner, match(scanner, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
 		case '=': return makeToken(scanner, match(scanner, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
 		case '<': {
