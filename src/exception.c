@@ -29,4 +29,6 @@ void defineExceptionClasses(VM* vm) {
 	defineException(vm, exception, "IndexException");
 	defineException(vm, exception, "UndefinedVariableException");
 	defineException(vm, exception, "StackOverflowException");
+
+	vm->exceptionClass = exception;
 }
