@@ -946,6 +946,36 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			break;
 		}
 
+		case OP_INSTANCEOF: {
+			Value superclass = pop(vm);
+			Value value = pop(vm);
+
+			if (!IS_INSTANCE(value)) {
+				push(vm, BOOL_VAL(false));
+				break;
+			}
+
+			if (!IS_CLASS(superclass)) {
+				if (!throwException(vm, "TypeException", "Superclass must be a class.")) return INTERPRETER_RUNTIME_ERR;
+				break;
+			}
+
+			ObjClass* superclassCheck = AS_CLASS(superclass);
+			ObjClass* currentClass = AS_INSTANCE(value)->klass;
+
+			while(currentClass != NULL) {
+				if (currentClass == superclassCheck) {
+					push(vm, BOOL_VAL(true));
+					goto end;
+				}
+				currentClass = currentClass->superclass;
+			}
+			push(vm, BOOL_VAL(false));
+
+			end:
+			break;
+		}
+
 		case OP_JUMP_IF_FALSE: {
 			uint16_t offset = READ_SHORT();
 			if (isFalsey(pop(vm))) frame->ip += offset;

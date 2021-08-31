@@ -64,7 +64,7 @@ typedef enum {
 	PREC_BIT_XOR, // ^
 	PREC_BIT_AND, // &
 	PREC_EQUALITY,  // == != is
-	PREC_COMPARISON,  // < > <= >= in
+	PREC_COMPARISON,  // < > <= >= in instanceof
 	PREC_SHIFT, // << >> >>>
 	PREC_TERM,  // + -
 	PREC_FACTOR,  // * / %
@@ -774,6 +774,7 @@ static void binary(Compiler* compiler, bool canAssign) {
 		case TOKEN_LESS_EQUAL: emitPair(compiler, OP_GREATER, OP_NOT); break;
 		case TOKEN_IS: emitByte(compiler, OP_IS); break;
 		case TOKEN_IN: emitByte(compiler, OP_IN); break;
+		case TOKEN_INSTANCEOF: emitByte(compiler, OP_INSTANCEOF); break;
 	}
 }
 
@@ -1153,6 +1154,7 @@ ParseRule rules[] = {
   [TOKEN_IF] = {NULL, NULL, PREC_NONE},
   [TOKEN_IS] = {NULL, binary, PREC_EQUALITY},
   [TOKEN_IN] = {NULL, binary, PREC_COMPARISON},
+  [TOKEN_INSTANCEOF] = {NULL, binary, PREC_COMPARISON},
   [TOKEN_NULL] = {literal, NULL, PREC_NONE},
   [TOKEN_OR] = {lambdaEmpty, or_, PREC_OR},
   [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
