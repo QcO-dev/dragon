@@ -151,7 +151,11 @@ static TokenType identifierType(Scanner* scanner) {
 				switch (scanner->start[1]) {
 					case 'f': return checkKeyword(scanner, 2, 0, "", TOKEN_IF);
 					case 's': return checkKeyword(scanner, 2, 0, "", TOKEN_IS);
-					case 'n': return checkKeyword(scanner, 2, 0, "", TOKEN_IN);
+					case 'n':
+						if (scanner->current - scanner->start > 2) {
+							return checkKeyword(scanner, 2, 8, "stanceof", TOKEN_INSTANCEOF);
+						}
+						return checkKeyword(scanner, 2, 0, "", TOKEN_IN);
 				}
 			}
 			break;
