@@ -466,13 +466,13 @@ static inline bool isInteger(double value) {
 	return floor(value) == value;
 }
 
-static bool validateListIndex(VM* vm, size_t listLength, Value indexVal, uintmax_t* dest) {
+bool validateListIndex(VM* vm, size_t listLength, Value indexVal, uintmax_t* dest) {
 	if (!IS_NUMBER(indexVal)) {
-		return throwException(vm, "TypeException", "List index must be a number.");
+		return throwException(vm, "TypeException", "Index must be a number.");
 	}
 	double indexNum = AS_NUMBER(indexVal);
 	if (!isInteger(indexNum)) {
-		return throwException(vm, "TypeException", "List index must be an integer.");
+		return throwException(vm, "TypeException", "Index must be an integer.");
 	}
 	intmax_t indexSigned = (intmax_t)indexNum;
 	uintmax_t index = indexSigned;
@@ -482,7 +482,7 @@ static bool validateListIndex(VM* vm, size_t listLength, Value indexVal, uintmax
 	}
 
 	if (index >= listLength) {
-		return throwException(vm, "IndexException", "Index %d is out of bounds for list of length %d.", indexSigned, listLength);
+		return throwException(vm, "IndexException", "Index %d is out of bounds for length %d.", indexSigned, listLength);
 	}
 	*dest = index;
 	return true;
