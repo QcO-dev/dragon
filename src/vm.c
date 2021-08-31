@@ -821,6 +821,19 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		case OP_MUL: BINARY_OP(NUMBER_VAL, *); break;
 		case OP_DIV: BINARY_OP(NUMBER_VAL, / ); break;
 
+		case OP_MOD: {
+			if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {
+				pop(vm);
+				pop(vm);
+				if (!throwException(vm, "TypeException", "Operands must be numbers.")) return INTERPRETER_RUNTIME_ERR;
+				break;
+			}
+			double b = AS_NUMBER(pop(vm));
+			double a = AS_NUMBER(pop(vm));
+			push(vm, NUMBER_VAL(fmod(a, b)));
+			break;
+		}
+
 		case OP_BIT_NOT: {
 			if (!IS_NUMBER(peek(vm, 0))) {
 				if (!throwException(vm, "TypeException", "Operand must be a number.")) return INTERPRETER_RUNTIME_ERR;
