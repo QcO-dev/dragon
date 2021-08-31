@@ -392,6 +392,30 @@ static void defineVariable(Compiler* compiler, uint32_t global) {
 	encodeConstant(compiler, global);
 }
 
+static void pattern(Compiler* compiler) {
+	if (match(compiler, TOKEN_IN)) {
+		expression(compiler);
+		emitByte(compiler, OP_IN);
+	}
+	else if (match(compiler, TOKEN_IS)) {
+		expression(compiler);
+		emitByte(compiler, OP_IS);
+	}
+	else if (match(compiler, TOKEN_ELSE)) {
+		emitByte(compiler, OP_POP);
+		emitByte(compiler, OP_TRUE);
+	}
+	else if (match(compiler, TOKEN_BANG)) {
+		pattern(compiler);
+		emitByte(compiler, OP_NOT);
+	}
+	else {
+		expression(compiler);
+
+		emitByte(compiler, OP_EQUAL);
+	}
+}
+
 static void function(Compiler* compiler, FunctionType type) {
 	Compiler functionCompiler;
 	initCompiler(&functionCompiler, compiler, type, compiler->vm, compiler->parser);
@@ -799,6 +823,57 @@ static void or_(Compiler* compiler, bool canAssign) {
 	patchJump(compiler, endJump);
 }
 
+static void switchExpression(Compiler* compiler, bool canAssign) {
+	beginScope(compiler);
+	consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after switch.");
+
+	expression(compiler);
+
+	consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after switch clause.");
+
+	consume(compiler, TOKEN_LEFT_BRACE, "Expected '{' before switch body.");
+
+	size_t breakSkipJump = emitJump(compiler, OP_JUMP);
+	size_t breakJump = emitJump(compiler, OP_JUMP);
+	patchJump(compiler, breakSkipJump);
+
+	while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
+		emitByte(compiler, OP_DUP);
+
+		pattern(compiler);
+
+		while (match(compiler, TOKEN_COMMA)) {
+			size_t falseJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+			size_t trueJump = emitJump(compiler, OP_JUMP);
+			patchJump(compiler, falseJump);
+			emitByte(compiler, OP_DUP);
+			pattern(compiler);
+			patchJump(compiler, trueJump);
+		}
+
+		size_t jump = emitJump(compiler, OP_JUMP_IF_FALSE);
+
+		consume(compiler, TOKEN_ARROW, "Expected '->' after case condition.");
+
+		expression(compiler);
+
+		consume(compiler, TOKEN_SEMICOLON, "Expected ';' after case expression.");
+
+		emitLoop(compiler, breakJump - 1);
+
+		patchJump(compiler, jump);
+	}
+
+	emitByte(compiler, OP_NULL);
+
+	patchJump(compiler, breakJump);
+	emitPair(compiler, OP_SWAP, OP_POP);
+
+	consume(compiler, TOKEN_RIGHT_BRACE, "Expected '}' after switch body.");
+
+	endScope(compiler);
+}
+
 static void parsePrecedence(Compiler* compiler, Precedence precedence) {
 	advance(compiler);
 	ParseFn prefixRule = getRule(compiler->parser->previous.type)->prefix;
@@ -969,6 +1044,53 @@ static void tryStatement(Compiler* compiler) {
 	}
 }
 
+static void switchStatement(Compiler* compiler) {
+	beginScope(compiler);
+	consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after switch.");
+
+	expression(compiler);
+
+	consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after switch clause.");
+
+	consume(compiler, TOKEN_LEFT_BRACE, "Expected '{' before switch body.");
+
+	size_t breakSkipJump = emitJump(compiler, OP_JUMP);
+	size_t breakJump = emitJump(compiler, OP_JUMP);
+	patchJump(compiler, breakSkipJump);
+
+	while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
+		emitByte(compiler, OP_DUP);
+
+		pattern(compiler);
+
+		while (match(compiler, TOKEN_COMMA)) {
+			size_t falseJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+			size_t trueJump = emitJump(compiler, OP_JUMP);
+			patchJump(compiler, falseJump);
+			emitByte(compiler, OP_DUP);
+			pattern(compiler);
+			patchJump(compiler, trueJump);
+		}
+
+		size_t jump = emitJump(compiler, OP_JUMP_IF_FALSE);
+
+		consume(compiler, TOKEN_ARROW, "Expected '->' after case condition.");
+
+		statement(compiler);
+
+		emitLoop(compiler, breakJump - 1);
+
+		patchJump(compiler, jump);
+	}
+
+	patchJump(compiler, breakJump);
+	emitByte(compiler, OP_POP);
+
+	consume(compiler, TOKEN_RIGHT_BRACE, "Expected '}' after switch body.");
+
+	endScope(compiler);
+}
+
 static void block(Compiler* compiler) {
 	while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
 		declaration(compiler);
@@ -994,6 +1116,9 @@ static void statement(Compiler* compiler) {
 	}
 	else if (match(compiler, TOKEN_TRY)) {
 		tryStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_SWITCH)) {
+		switchStatement(compiler);
 	}
 	else if (match(compiler, TOKEN_LEFT_BRACE)) {
 		beginScope(compiler);
@@ -1123,6 +1248,8 @@ ParseRule rules[] = {
   [TOKEN_MINUS] = {unary,  binary, PREC_TERM},
   [TOKEN_PLUS] = {NULL, binary, PREC_TERM},
   [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
+  [TOKEN_COLON] = {NULL, NULL, PREC_NONE},
+  [TOKEN_ARROW] = {NULL, NULL, PREC_NONE},
   [TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
   [TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
   [TOKEN_PERCENT] = {NULL, binary, PREC_FACTOR},
@@ -1160,6 +1287,7 @@ ParseRule rules[] = {
   [TOKEN_OR] = {lambdaEmpty, or_, PREC_OR},
   [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
   [TOKEN_SUPER] = {super_, NULL, PREC_NONE},
+  [TOKEN_SWITCH] = {switchExpression, NULL, PREC_NONE},
   [TOKEN_THIS] = {this_, NULL, PREC_NONE},
   [TOKEN_THROW] = {NULL, NULL, PREC_NONE},
   [TOKEN_TRUE] = {literal, NULL, PREC_NONE},
