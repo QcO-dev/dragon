@@ -69,10 +69,11 @@ typedef struct {
 	ValueArray items;
 } ObjList;
 
-typedef struct {
+typedef struct ObjClass {
 	Obj obj;
 	ObjString* name;
 	Table methods;
+	struct ObjClass* superclass;
 } ObjClass;
 
 typedef struct {

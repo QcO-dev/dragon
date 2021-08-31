@@ -1008,6 +1008,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			}
 			ObjClass* subclass = AS_CLASS(peek(vm, 0));
 			tableAddAll(vm, &AS_CLASS(superclass)->methods, &subclass->methods);
+			subclass->superclass = AS_CLASS(superclass);
 			pop(vm);
 			break;
 		}
