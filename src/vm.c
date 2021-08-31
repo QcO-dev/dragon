@@ -7,6 +7,8 @@
 #include "leb128.h"
 #include "natives.h"
 #include "exception.h"
+#include "list.h"
+#include "strings.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -41,6 +43,8 @@ void initVM(VM* vm) {
 	vm->compiler = NULL;
 	initTable(&vm->strings);
 	initTable(&vm->globals);
+	initTable(&vm->listMethods);
+	initTable(&vm->stringMethods);
 
 	vm->constructorString = NULL; // GC Call
 	vm->constructorString = copyString(vm, "constructor", 11);
@@ -57,11 +61,15 @@ void initVM(VM* vm) {
 	defineGlobalNatives(vm);
 	defineObjectNatives(vm);
 	defineExceptionClasses(vm);
+	defineListMethods(vm);
+	defineStringMethods(vm);
 }
 
 void freeVM(VM* vm) {
 	freeTable(vm, &vm->strings);
 	freeTable(vm, &vm->globals);
+	freeTable(vm, &vm->listMethods);
+	freeTable(vm, &vm->stringMethods);
 	vm->constructorString = NULL;
 	vm->shouldGC = false;
 	FREE_ARRAY(vm, CallFrame, vm->frames, vm->frameSize);
@@ -234,7 +242,7 @@ static void closeUpvalues(VM* vm, Value* last) {
 	}
 }
 
-static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
+static bool call(VM* vm, ObjClosure* closure, uint8_t argCount, uint8_t* argsUsed) {
 	size_t expected = closure->function->arity;
 	if(argCount != expected) {
 		if (!closure->function->isLambda) {
@@ -251,6 +259,7 @@ static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
 			}
 		}
 	}
+	*argsUsed = expected;
 
 	if (vm->frameCount == FRAMES_MAX) {
 		return throwException(vm, "StackOverflowException", "Stack overflow (Max frame: %d).", FRAMES_MAX);
@@ -277,20 +286,20 @@ static bool call(VM* vm, ObjClosure* closure, uint8_t argCount) {
 	return true;
 }
 
-bool callValue(VM* vm, Value callee, uint8_t argCount) {
+bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed) {
 	if (IS_OBJ(callee)) {
 		switch (OBJ_TYPE(callee)) {
 			case OBJ_BOUND_METHOD: {
 				ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
 				vm->stackTop[-argCount - 1] = bound->receiver;
-				return call(vm, bound->method, argCount);
+				return call(vm, bound->method, argCount, argsUsed);
 			}
 			case OBJ_CLASS: {
 				ObjClass* klass = AS_CLASS(callee);
 				vm->stackTop[-argCount - 1] = OBJ_VAL(newInstance(vm, klass));
 				Value initializer;
 				if (tableGet(&klass->methods, vm->constructorString, &initializer)) {
-					return call(vm, AS_CLOSURE(initializer), argCount);
+					return call(vm, AS_CLOSURE(initializer), argCount, argsUsed);
 				}
 				else if (argCount != 0) {
 					pop(vm);
@@ -300,7 +309,7 @@ bool callValue(VM* vm, Value callee, uint8_t argCount) {
 				return true;
 			}
 			case OBJ_CLOSURE:
-				return call(vm, AS_CLOSURE(callee), argCount);
+				return call(vm, AS_CLOSURE(callee), argCount, argsUsed);
 			case OBJ_NATIVE: {
 				ObjNative* native = AS_NATIVE(callee);
 
@@ -362,18 +371,37 @@ static bool invokeFromClass(VM* vm, ObjInstance* instance, ObjClass* klass, ObjS
 		return throwException(vm, "PropertyException", "Undefined property '%s'.", name->chars);
 	}
 
+	uint8_t _;
 	if (IS_NATIVE(method)) {
 		ObjNative* native = AS_NATIVE(method);
 		native->isBound = true;
 		native->bound = OBJ_VAL(instance);
-		return callValue(vm, OBJ_VAL(native), argCount);
+		return callValue(vm, OBJ_VAL(native), argCount, &_);
 	}
 
-	return call(vm, AS_CLOSURE(method), argCount);
+	return call(vm, AS_CLOSURE(method), argCount, &_);
 }
 
 static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 	Value receiver = peek(vm, argCount);
+
+	uint8_t _;
+	if (IS_LIST(receiver)) {
+		Value method;
+		if (!tableGet(&vm->listMethods, name, &method)) return throwException(vm, "PropertyException", "Undefined list method '%s'.", name->chars);
+		ObjNative* native = AS_NATIVE(method);
+		native->isBound = true;
+		native->bound = receiver;
+		return callValue(vm, method, argCount, &_);
+	}
+	else if (IS_STRING(receiver)) {
+		Value method;
+		if (!tableGet(&vm->stringMethods, name, &method)) return throwException(vm, "PropertyException", "Undefined string method '%s'.", name->chars);
+		ObjNative* native = AS_NATIVE(method);
+		native->isBound = true;
+		native->bound = receiver;
+		return callValue(vm, method, argCount, &_);
+	}
 
 	if (!IS_INSTANCE(receiver)) {
 		return throwException(vm, "TypeException", "Only instances contain methods.");
@@ -384,7 +412,7 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 	Value value;
 	if (tableGet(&instance->fields, name, &value)) {
 		vm->stackTop[-argCount - 1] = value;
-		return callValue(vm, value, argCount);
+		return callValue(vm, value, argCount, &_);
 	}
 
 	return invokeFromClass(vm, instance, instance->klass, name, argCount);
@@ -438,16 +466,15 @@ static inline bool isInteger(double value) {
 	return floor(value) == value;
 }
 
-static bool validateListIndex(VM* vm, ObjList* list, Value indexVal, uintmax_t* dest) {
+bool validateListIndex(VM* vm, size_t listLength, Value indexVal, uintmax_t* dest) {
 	if (!IS_NUMBER(indexVal)) {
-		return throwException(vm, "TypeException", "List index must be a number.");
+		return throwException(vm, "TypeException", "Index must be a number.");
 	}
 	double indexNum = AS_NUMBER(indexVal);
 	if (!isInteger(indexNum)) {
-		return throwException(vm, "TypeException", "List index must be an integer.");
+		return throwException(vm, "TypeException", "Index must be an integer.");
 	}
 	intmax_t indexSigned = (intmax_t)indexNum;
-	size_t listLength = list->items.count;
 	uintmax_t index = indexSigned;
 
 	if (indexSigned < 0) {
@@ -455,7 +482,7 @@ static bool validateListIndex(VM* vm, ObjList* list, Value indexVal, uintmax_t* 
 	}
 
 	if (index >= listLength) {
-		return throwException(vm, "IndexException", "Index %d is out of bounds for list of length %d.", indexSigned, listLength);
+		return throwException(vm, "IndexException", "Index %d is out of bounds for length %d.", indexSigned, listLength);
 	}
 	*dest = index;
 	return true;
@@ -588,13 +615,32 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		}
 
 		case OP_GET_PROPERTY: {
+			ObjString* name = READ_STRING();
+
+			if (IS_LIST(peek(vm, 0))) {
+				Value method;
+				if (!tableGet(&vm->listMethods, name, &method)) return throwException(vm, "PropertyException", "Undefined list method '%s'.", name->chars);
+				ObjNative* native = AS_NATIVE(method);
+				native->isBound = true;
+				native->bound = pop(vm);
+				push(vm, method);
+				break;
+			}
+			else if (IS_STRING(peek(vm, 0))) {
+				Value method;
+				if (!tableGet(&vm->stringMethods, name, &method)) return throwException(vm, "PropertyException", "Undefined string method '%s'.", name->chars);
+				ObjNative* native = AS_NATIVE(method);
+				native->isBound = true;
+				native->bound = pop(vm);
+				push(vm, method);
+				break;
+			}
+
 			if (!IS_INSTANCE(peek(vm, 0))) {
 				if (!throwException(vm, "TypeException", "Only instances contain properties.")) return INTERPRETER_RUNTIME_ERR;
 				break;
 			}
 			ObjInstance* instance = AS_INSTANCE(peek(vm, 0));
-			ObjString* name = READ_STRING();
-
 			Value value;
 			if (tableGet(&instance->fields, name, &value)) {
 				pop(vm);
@@ -637,11 +683,23 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjList* list = AS_LIST(pop(vm));
 
 				uintmax_t index;
-				if (!validateListIndex(vm, list, indexVal, &index)) {
+				if (!validateListIndex(vm, list->items.count, indexVal, &index)) {
 					return INTERPRETER_RUNTIME_ERR;
 				}
 
 				push(vm, list->items.values[index]);
+				break;
+			}
+			else if (IS_STRING(peek(vm, 1))) {
+				Value indexVal = pop(vm);
+				ObjString* string = AS_STRING(pop(vm));
+
+				uintmax_t index;
+				if (!validateListIndex(vm, string->length, indexVal, &index)) {
+					return INTERPRETER_RUNTIME_ERR;
+				}
+
+				push(vm, OBJ_VAL(copyString(vm, &string->chars[index], 1)));
 				break;
 			}
 			else if (IS_INSTANCE(peek(vm, 1))) {
@@ -674,7 +732,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				ObjList* list = AS_LIST(pop(vm));
 
 				uintmax_t index;
-				if (!validateListIndex(vm, list, indexVal, &index)) {
+				if (!validateListIndex(vm, list->items.count, indexVal, &index)) {
 					return INTERPRETER_RUNTIME_ERR;
 				}
 
@@ -901,7 +959,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_CALL: {
 			uint8_t argCount = READ_BYTE();
-			if (!callValue(vm, peek(vm, argCount), argCount)) {
+			uint8_t _;
+			if (!callValue(vm, peek(vm, argCount), argCount, &_)) {
 				return INTERPRETER_RUNTIME_ERR;
 			}
 			break;
@@ -1071,11 +1130,12 @@ InterpreterResult interpret(VM* vm, const char* source) {
 
 	vm->compiler = NULL;
 
+	uint8_t _;
 	push(vm, OBJ_VAL(function));
 	ObjClosure* closure = newClosure(vm, function);
 	pop(vm);
 	push(vm, OBJ_VAL(closure));
-	call(vm, closure, 0);
+	call(vm, closure, 0, &_);
 
 	return run(vm);
 }

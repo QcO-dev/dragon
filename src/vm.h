@@ -23,6 +23,8 @@ struct VM {
 	Value* stackTop;
 	Table globals;
 	Table strings;
+	Table listMethods;
+	Table stringMethods;
 	ObjString* constructorString;
 	ObjClass* objectClass;
 	Compiler* compiler;
@@ -47,7 +49,8 @@ void initVM(VM* vm);
 void freeVM(VM* vm);
 InterpreterResult interpret(VM* vm, const char* source);
 bool throwException(VM* vm, const char* name, const char* format, ...);
-bool callValue(VM* vm, Value callee, uint8_t argCount);
+bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed);
+bool validateListIndex(VM* vm, size_t listLength, Value indexVal, uintmax_t* dest);
 Value runFunction(VM* vm, bool* hasError);
 void push(VM* vm, Value value);
 Value pop(VM* vm);
