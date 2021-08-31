@@ -823,6 +823,57 @@ static void or_(Compiler* compiler, bool canAssign) {
 	patchJump(compiler, endJump);
 }
 
+static void switchExpression(Compiler* compiler, bool canAssign) {
+	beginScope(compiler);
+	consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after switch.");
+
+	expression(compiler);
+
+	consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after switch clause.");
+
+	consume(compiler, TOKEN_LEFT_BRACE, "Expected '{' before switch body.");
+
+	size_t breakSkipJump = emitJump(compiler, OP_JUMP);
+	size_t breakJump = emitJump(compiler, OP_JUMP);
+	patchJump(compiler, breakSkipJump);
+
+	while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
+		emitByte(compiler, OP_DUP);
+
+		pattern(compiler);
+
+		while (match(compiler, TOKEN_COMMA)) {
+			size_t falseJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+			size_t trueJump = emitJump(compiler, OP_JUMP);
+			patchJump(compiler, falseJump);
+			emitByte(compiler, OP_DUP);
+			pattern(compiler);
+			patchJump(compiler, trueJump);
+		}
+
+		size_t jump = emitJump(compiler, OP_JUMP_IF_FALSE);
+
+		consume(compiler, TOKEN_ARROW, "Expected '->' after case condition.");
+
+		expression(compiler);
+
+		consume(compiler, TOKEN_SEMICOLON, "Expected ';' after case expression.");
+
+		emitLoop(compiler, breakJump - 1);
+
+		patchJump(compiler, jump);
+	}
+
+	emitByte(compiler, OP_NULL);
+
+	patchJump(compiler, breakJump);
+	emitPair(compiler, OP_SWAP, OP_POP);
+
+	consume(compiler, TOKEN_RIGHT_BRACE, "Expected '}' after switch body.");
+
+	endScope(compiler);
+}
+
 static void parsePrecedence(Compiler* compiler, Precedence precedence) {
 	advance(compiler);
 	ParseFn prefixRule = getRule(compiler->parser->previous.type)->prefix;
@@ -1235,7 +1286,7 @@ ParseRule rules[] = {
   [TOKEN_OR] = {lambdaEmpty, or_, PREC_OR},
   [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
   [TOKEN_SUPER] = {super_, NULL, PREC_NONE},
-  [TOKEN_SWITCH] = {NULL, NULL, PREC_NONE},
+  [TOKEN_SWITCH] = {switchExpression, NULL, PREC_NONE},
   [TOKEN_THIS] = {this_, NULL, PREC_NONE},
   [TOKEN_THROW] = {NULL, NULL, PREC_NONE},
   [TOKEN_TRUE] = {literal, NULL, PREC_NONE},
