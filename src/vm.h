@@ -49,7 +49,7 @@ void initVM(VM* vm);
 void freeVM(VM* vm);
 InterpreterResult interpret(VM* vm, const char* source);
 bool throwException(VM* vm, const char* name, const char* format, ...);
-bool callValue(VM* vm, Value callee, uint8_t argCount);
+bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed);
 Value runFunction(VM* vm, bool* hasError);
 void push(VM* vm, Value value);
 Value pop(VM* vm);

@@ -74,7 +74,8 @@ ObjString* valueToRepr(VM* vm, Value value) {
 }
 
 bool isFalsey(Value value) {
-	return IS_NULL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+	return IS_NULL(value) || (IS_BOOL(value) && !AS_BOOL(value))
+		|| (IS_NUMBER(value) && AS_NUMBER(value) == 0);
 }
 
 bool listsEqual(ObjList* a, ObjList* b) {

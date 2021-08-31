@@ -57,7 +57,8 @@ void defineGlobalNatives(VM* vm) {
 
 Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, bool* hasError) {
 	if (!IS_NATIVE(callee)) {
-		callValue(vm, callee, argCount);
+		uint8_t argsUsed = argCount;
+		callValue(vm, callee, argCount, &argsUsed);
 
 		bool functionErr = false;
 		Value returnValue = runFunction(vm, &functionErr);
@@ -66,7 +67,7 @@ Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, 
 			return NULL_VAL;
 		}
 
-		for (size_t i = 0; i < argCount; i++) pop(vm);
+		for (size_t i = 0; i < argsUsed; i++) pop(vm);
 
 		return returnValue;
 	}
@@ -78,7 +79,7 @@ Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, 
 		}
 
 		bool functionErr = false;
-		Value returnValue = native->function(vm, bound, argCount, vm->stackTop - argCount, &functionErr);
+		Value returnValue = native->function(vm, bound == NULL ? &native->bound : bound, argCount, vm->stackTop - argCount, &functionErr);
 		if (functionErr) {
 			*hasError = true;
 			return NULL_VAL;
