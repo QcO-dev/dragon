@@ -67,7 +67,7 @@ typedef enum {
 	PREC_COMPARISON,  // < > <= >= in
 	PREC_SHIFT, // << >> >>>
 	PREC_TERM,  // + -
-	PREC_FACTOR,  // * /
+	PREC_FACTOR,  // * / %
 	PREC_UNARY, // ! - ~
 	PREC_CALL,  // . () {} []
 	PREC_PRIMARY
@@ -759,6 +759,7 @@ static void binary(Compiler* compiler, bool canAssign) {
 		case TOKEN_MINUS: emitByte(compiler, OP_SUB); break;
 		case TOKEN_STAR: emitByte(compiler, OP_MUL); break;
 		case TOKEN_SLASH: emitByte(compiler, OP_DIV); break;
+		case TOKEN_PERCENT: emitByte(compiler, OP_MOD); break;
 		case TOKEN_BIT_AND: emitByte(compiler, OP_AND); break;
 		case TOKEN_BIT_OR: emitByte(compiler, OP_OR); break;
 		case TOKEN_XOR: emitByte(compiler, OP_XOR); break;
@@ -1123,6 +1124,7 @@ ParseRule rules[] = {
   [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
   [TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
   [TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
+  [TOKEN_PERCENT] = {NULL, binary, PREC_FACTOR},
   [TOKEN_BANG] = {unary, NULL, PREC_NONE},
   [TOKEN_BANG_EQUAL] = {NULL, binary, PREC_EQUALITY},
   [TOKEN_EQUAL] = {NULL, NULL, PREC_NONE},

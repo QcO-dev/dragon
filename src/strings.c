@@ -165,11 +165,28 @@ static Value stringSubstringNative(VM* vm, Value* bound, uint8_t argCount, Value
 
 	uintmax_t start;
 	if (!validateListIndex(vm, string->length, startV, &start)) {
-		return NULL_VAL;
+		return (*hasError) ? NULL_VAL : pop(vm);
 	}
-	uintmax_t end;
-	if (!validateListIndex(vm, string->length, endV, &end)) {
-		return NULL_VAL;
+	
+	if (!IS_NUMBER(endV)) {
+		*hasError = throwException(vm, "TypeException", "Index must be a number.");
+		return (*hasError) ? NULL_VAL : pop(vm);
+	}
+	double indexNum = AS_NUMBER(endV);
+	if (floor(indexNum) != indexNum) {
+		*hasError = !throwException(vm, "TypeException", "Index must be an integer.");
+		return (*hasError) ? NULL_VAL : pop(vm);
+	}
+	intmax_t indexSigned = (intmax_t)indexNum;
+	uintmax_t end = indexSigned;
+
+	if (indexSigned < 0) {
+		end = string->length - (-indexSigned);
+	}
+
+	if (end > string->length) {
+		*hasError = !throwException(vm, "IndexException", "Index %d is out of bounds for length %d.", indexSigned, string->length);
+		return (*hasError) ? NULL_VAL : pop(vm);
 	}
 
 	if (end < start) {
