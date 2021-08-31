@@ -488,6 +488,18 @@ bool validateListIndex(VM* vm, size_t listLength, Value indexVal, uintmax_t* des
 	return true;
 }
 
+static bool instanceof(ObjInstance* instance, ObjClass* klass) {
+	ObjClass* currentClass = instance->klass;
+
+	while (currentClass != NULL) {
+		if (currentClass == klass) {
+			return true;
+		}
+		currentClass = currentClass->superclass;
+	}
+	return false;
+}
+
 static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 	CallFrame* frame = &vm->frames[vm->frameCount - 1];
 	size_t baseFrameCount = vm->frameCount - 1;
@@ -961,18 +973,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			}
 
 			ObjClass* superclassCheck = AS_CLASS(superclass);
-			ObjClass* currentClass = AS_INSTANCE(value)->klass;
-
-			while(currentClass != NULL) {
-				if (currentClass == superclassCheck) {
-					push(vm, BOOL_VAL(true));
-					goto end;
-				}
-				currentClass = currentClass->superclass;
-			}
-			push(vm, BOOL_VAL(false));
-
-			end:
+			
+			push(vm, BOOL_VAL(instanceof(AS_INSTANCE(value), superclassCheck)));
 			break;
 		}
 
@@ -1075,6 +1077,11 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			}
 
 			ObjInstance* instance = AS_INSTANCE(throwee);
+
+			if (!instanceof(instance, vm->exceptionClass)) {
+				if (!throwException(vm, "TypeException", "Throwee must inherit from 'Exception'.")) return INTERPRETER_RUNTIME_ERR;
+				break;
+			}
 
 			if (!throwGeneral(vm, instance)) return INTERPRETER_RUNTIME_ERR;
 

@@ -27,6 +27,7 @@ struct VM {
 	Table stringMethods;
 	ObjString* constructorString;
 	ObjClass* objectClass;
+	ObjClass* exceptionClass;
 	Compiler* compiler;
 	ObjUpvalue* openUpvalues;
 	size_t bytesAllocated;
