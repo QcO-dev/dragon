@@ -2,7 +2,7 @@
 #include "natives.h"
 #include <math.h>
 
-static Value iteratorConstructorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+Value iteratorConstructorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	ObjInstance* instance = AS_INSTANCE(*bound);
 
 	tableSet(vm, &instance->fields, vm->stringConstants[STR_INDEX], NUMBER_VAL(0));
