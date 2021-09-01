@@ -51,6 +51,9 @@ struct Compiler {
 	Upvalue upvalues[UINT8_COUNT];
 	size_t localCount;
 	size_t scopeDepth;
+	bool isInLoop;
+	size_t continueJump;
+	size_t breakJump;
 	Parser* parser;
 	VM* vm;
 };
@@ -154,6 +157,7 @@ static void initCompiler(Compiler* compiler, Compiler* parent, FunctionType type
 	compiler->scopeDepth = 0;
 	compiler->parser = parser;
 	compiler->function = newFunction(vm);
+	compiler->isInLoop = false;
 
 	if (compiler->enclosing != NULL) {
 		compiler->currentClass = compiler->enclosing->currentClass;
@@ -972,19 +976,37 @@ static void returnStatement(Compiler* compiler) {
 }
 
 static void whileStatement(Compiler* compiler) {
+	bool wasInLoop = compiler->isInLoop;
+	size_t prevContinueJump = compiler->continueJump;
+	size_t prevBreakJump = compiler->breakJump;
+	compiler->isInLoop = true;
+
 	size_t loopStart = currentChunk(compiler)->count;
+
+	compiler->continueJump = loopStart;
 	consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after 'while'.");
 	expression(compiler);
 	consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after condition");
 
 	size_t exitJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+	compiler->breakJump = exitJump;
 	statement(compiler);
 	emitLoop(compiler, loopStart);
 
 	patchJump(compiler, exitJump);
+
+	compiler->isInLoop = wasInLoop;
+	compiler->continueJump = prevContinueJump;
+	compiler->breakJump = prevBreakJump;
 }
 
 static void forStatement(Compiler* compiler) {
+	bool wasInLoop = compiler->isInLoop;
+	size_t prevContinueJump = compiler->continueJump;
+	size_t prevBreakJump = compiler->breakJump;
+
+	compiler->isInLoop = true;
+
 	beginScope(compiler);
 	consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after 'for'.");
 	if (match(compiler, TOKEN_SEMICOLON)) {
@@ -1004,6 +1026,12 @@ static void forStatement(Compiler* compiler) {
 		consume(compiler, TOKEN_SEMICOLON, "Expected ';' after condition");
 
 		exitJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+		compiler->breakJump = exitJump;
+	}
+	else {
+		emitByte(compiler, OP_TRUE);
+		exitJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+		compiler->breakJump = exitJump;
 	}
 	
 	if (!match(compiler, TOKEN_RIGHT_PAREN)) {
@@ -1017,12 +1045,17 @@ static void forStatement(Compiler* compiler) {
 		loopStart = incrementStart;
 		patchJump(compiler, bodyJump);
 	}
+	compiler->continueJump = loopStart;
 
 	statement(compiler);
 	emitLoop(compiler, loopStart);
 
 	if (exitJump != SIZE_MAX) patchJump(compiler, exitJump);
 	endScope(compiler);
+
+	compiler->isInLoop = wasInLoop;
+	compiler->continueJump = prevContinueJump;
+	compiler->breakJump = prevBreakJump;
 }
 
 static void throwStatement(Compiler* compiler) {
@@ -1122,6 +1155,19 @@ static void switchStatement(Compiler* compiler) {
 	endScope(compiler);
 }
 
+static void continueStatement(Compiler* compiler) {
+	if (!compiler->isInLoop) error(compiler->parser, "Use of 'continue' is not permitted outside of a loop.");
+	emitLoop(compiler, compiler->continueJump);
+	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after continue.");
+}
+
+static void breakStatement(Compiler* compiler) {
+	if (!compiler->isInLoop) error(compiler->parser, "Use of 'break' is not permitted outside of a loop.");
+	emitByte(compiler, OP_FALSE);
+	emitLoop(compiler, compiler->breakJump - 1);
+	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after break.");
+}
+
 static void block(Compiler* compiler) {
 	while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
 		declaration(compiler);
@@ -1150,6 +1196,12 @@ static void statement(Compiler* compiler) {
 	}
 	else if (match(compiler, TOKEN_SWITCH)) {
 		switchStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_CONTINUE)) {
+		continueStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_BREAK)) {
+		breakStatement(compiler);
 	}
 	else if (match(compiler, TOKEN_LEFT_BRACE)) {
 		beginScope(compiler);
@@ -1305,8 +1357,10 @@ ParseRule rules[] = {
   [TOKEN_STRING] = {string, NULL, PREC_NONE},
   [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
   [TOKEN_AND] = {NULL, and_, PREC_AND},
+  [TOKEN_BREAK] = {NULL, NULL, PREC_NONE},
   [TOKEN_CATCH] = {NULL, NULL, PREC_NONE},
   [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
+  [TOKEN_CONTINUE] = {NULL, NULL, PREC_NONE},
   [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
   [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
   [TOKEN_FINALLY] = {NULL, NULL, PREC_NONE},
