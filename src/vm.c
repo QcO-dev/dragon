@@ -31,6 +31,30 @@ static void initializeStack(VM* vm) {
 	vm->shouldGC = true;
 }
 
+static void buildStringConstantTable(VM* vm) {
+	ObjString** table = ALLOCATE(vm, ObjString*, STR_CONSTANT_COUNT);
+	for (size_t i = 0; i < STR_CONSTANT_COUNT; i++) table[i] = NULL; // Avoid GC Problems
+
+	table[STR_CONSTRUCTOR] = copyString(vm, "constructor", 11);
+	table[STR_MESSAGE] = copyString(vm, "message", 7);
+	table[STR_STACK_TRACE] = copyString(vm, "stackTrace", 10);
+	table[STR_BOOLEAN] = copyString(vm, "boolean", 7);
+	table[STR_NUMBER] = copyString(vm, "number", 6);
+	table[STR_NULL] = copyString(vm, "null", 4);
+	table[STR_FUNCTION] = copyString(vm, "function", 8);
+	table[STR_CLASS] = copyString(vm, "class", 5);
+	table[STR_INSTANCE] = copyString(vm, "instance", 8);
+	table[STR_STRING] = copyString(vm, "string", 6);
+	table[STR_LIST] = copyString(vm, "list", 4);
+	table[STR_TRUE] = copyString(vm, "true", 4);
+	table[STR_FALSE] = copyString(vm, "false", 5);
+	table[STR_NULL] = copyString(vm, "null", 4);
+	table[STR_NAN] = copyString(vm, "NaN", 3);
+	table[STR_NATIVE_FUNCTION] = copyString(vm, "<native function>", 17);
+
+	vm->stringConstants = table;
+}
+
 void initVM(VM* vm) {
 	initializeStack(vm);
 	vm->objects = NULL;
@@ -45,9 +69,7 @@ void initVM(VM* vm) {
 	initTable(&vm->globals);
 	initTable(&vm->listMethods);
 	initTable(&vm->stringMethods);
-
-	vm->constructorString = NULL; // GC Call
-	vm->constructorString = copyString(vm, "constructor", 11);
+	buildStringConstantTable(vm);
 
 	ObjString* objectClassName = copyString(vm, "Object", 6);
 	push(vm, OBJ_VAL(objectClassName)); // GC
@@ -70,7 +92,8 @@ void freeVM(VM* vm) {
 	freeTable(vm, &vm->globals);
 	freeTable(vm, &vm->listMethods);
 	freeTable(vm, &vm->stringMethods);
-	vm->constructorString = NULL;
+	FREE_ARRAY(vm, ObjString*, vm->stringConstants, STR_CONSTANT_COUNT);
+	vm->stringConstants = NULL;
 	vm->shouldGC = false;
 	FREE_ARRAY(vm, CallFrame, vm->frames, vm->frameSize);
 	FREE_ARRAY(vm, Value, vm->stack, vm->stackSize);
@@ -106,7 +129,7 @@ static bool throwGeneral(VM* vm, ObjInstance* throwee) {
 	initValueArray(&stackTrace);
 
 	Value message;
-	if (!tableGet(&throwee->fields, copyString(vm, "message", 7), &message)) {
+	if (!tableGet(&throwee->fields, vm->stringConstants[STR_MESSAGE], &message)) {
 		message = NULL_VAL;
 	}
 
@@ -172,7 +195,7 @@ static bool throwGeneral(VM* vm, ObjInstance* throwee) {
 	writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
 
 	ObjList* stackTraceList = newList(vm, stackTrace);
-	tableSet(vm, &throwee->fields, copyString(vm, "stackTrace", 10), OBJ_VAL(stackTraceList));
+	tableSet(vm, &throwee->fields, vm->stringConstants[STR_STACK_TRACE], OBJ_VAL(stackTraceList));
 
 	frame->isTry = false;
 	frame->ip = frame->catchJump;
@@ -201,7 +224,7 @@ bool throwException(VM* vm, const char* name, const char* format, ...) {
 
 	ObjInstance* instance = newInstance(vm, AS_CLASS(value));
 	push(vm, OBJ_VAL(instance));
-	tableSet(vm, &instance->fields, copyString(vm, "message", 7), OBJ_VAL(message));
+	tableSet(vm, &instance->fields, vm->stringConstants[STR_MESSAGE], OBJ_VAL(message));
 
 	popN(vm, 2);
 	push(vm, OBJ_VAL(instance));
@@ -298,7 +321,7 @@ bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed) {
 				ObjClass* klass = AS_CLASS(callee);
 				vm->stackTop[-argCount - 1] = OBJ_VAL(newInstance(vm, klass));
 				Value initializer;
-				if (tableGet(&klass->methods, vm->constructorString, &initializer)) {
+				if (tableGet(&klass->methods, vm->stringConstants[STR_CONSTRUCTOR], &initializer)) {
 					return call(vm, AS_CLOSURE(initializer), argCount, argsUsed);
 				}
 				else if (argCount != 0) {
@@ -984,6 +1007,37 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			ObjClass* superclassCheck = AS_CLASS(superclass);
 			
 			push(vm, BOOL_VAL(instanceof(AS_INSTANCE(value), superclassCheck)));
+			break;
+		}
+
+		case OP_TYPEOF: {
+			Value value = pop(vm);
+
+			ObjString* string = NULL;
+
+			switch (value.type) {
+				case VAL_BOOL: string = vm->stringConstants[STR_BOOLEAN]; break;
+				case VAL_NUMBER: string = vm->stringConstants[STR_NUMBER]; break;
+				case VAL_NULL: string = vm->stringConstants[STR_NULL]; break;
+				case VAL_OBJ: {
+					switch (AS_OBJ(value)->type) {
+						case OBJ_CLOSURE:
+						case OBJ_BOUND_METHOD:
+						case OBJ_NATIVE:
+						case OBJ_FUNCTION:
+							string = vm->stringConstants[STR_FUNCTION];
+							break;
+						case OBJ_CLASS: string = vm->stringConstants[STR_CLASS]; break;
+						case OBJ_INSTANCE: string = vm->stringConstants[STR_INSTANCE]; break;
+						case OBJ_STRING: string = vm->stringConstants[STR_STRING]; break;
+						case OBJ_LIST: string = vm->stringConstants[STR_LIST]; break;
+					}
+					break;
+				}
+			}
+
+			push(vm, OBJ_VAL(string));
+
 			break;
 		}
 

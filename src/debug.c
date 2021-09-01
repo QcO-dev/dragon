@@ -104,6 +104,7 @@ int disassembleInstruction(VM* vm, Chunk* chunk, int offset) {
 		case OP_LESS: return simpleInstruction("LESS", offset);
 		case OP_IN: return simpleInstruction("IN", offset);
 		case OP_INSTANCEOF: return simpleInstruction("INSTANCEOF", offset);
+		case OP_TYPEOF: return simpleInstruction("TYPEOF", offset);
 		case OP_JUMP: return jumpInstruction("JUMP", 1, chunk, offset);
 		case OP_LOOP: return jumpInstruction("LOOP", -1, chunk, offset);
 		case OP_JUMP_IF_FALSE: return jumpInstruction("JUMP_IF_FALSE", 1, chunk, offset);

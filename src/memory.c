@@ -88,7 +88,11 @@ static void markRoots(VM* vm) {
 	markTable(vm, &vm->globals);
 	markTable(vm, &vm->listMethods);
 	markTable(vm, &vm->stringMethods);
-	markObject(vm, (Obj*)vm->constructorString);
+	
+	for (size_t i = 0; i < STR_CONSTANT_COUNT; i++) {
+		markObject(vm, (Obj*)vm->stringConstants[i]);
+	}
+
 	markObject(vm, (Obj*)vm->objectClass);
 	markObject(vm, (Obj*)vm->exceptionClass);
 	if(vm->compiler != NULL) markCompilerRoots(vm->compiler);

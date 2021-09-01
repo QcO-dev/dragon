@@ -4,6 +4,7 @@
 #include <math.h>
 #include "memory.h"
 #include "object.h"
+#include "vm.h"
 
 void initValueArray(ValueArray* array) {
 	array->values = NULL;
@@ -43,7 +44,7 @@ ObjString* numberToString(VM* vm, double value) {
 		return makeStringf(vm, "%sInfinity", signbit(value) ? "-" : "");
 	}
 	else if (isnan(value)) {
-		return copyString(vm, "NaN", 3);
+		return vm->stringConstants[STR_NAN];
 	}
 	return makeStringf(vm, "%g", value);
 }
@@ -51,9 +52,9 @@ ObjString* numberToString(VM* vm, double value) {
 ObjString* valueToString(VM* vm, Value value, bool* hasError) {
 	switch (value.type) {
 		case VAL_BOOL:
-			return AS_BOOL(value) ? copyString(vm, "true", 4) : copyString(vm, "false", 5);
+			return vm->stringConstants[AS_BOOL(value) ? STR_TRUE : STR_FALSE];
 		case VAL_NULL:
-			return copyString(vm, "null", 4);
+			return vm->stringConstants[STR_NULL];
 		case VAL_NUMBER:
 			return numberToString(vm, AS_NUMBER(value));
 		case VAL_OBJ:

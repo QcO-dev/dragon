@@ -69,7 +69,7 @@ typedef enum {
 	PREC_SHIFT, // << >> >>>
 	PREC_TERM,  // + -
 	PREC_FACTOR,  // * / %
-	PREC_UNARY, // ! - ~
+	PREC_UNARY, // ! - ~ typeof
 	PREC_CALL,  // . () {} []
 	PREC_PRIMARY
 } Precedence;
@@ -781,6 +781,7 @@ static void unary(Compiler* compiler, bool canAssign) {
 		case TOKEN_MINUS: emitByte(compiler, OP_NEGATE); break;
 		case TOKEN_BANG: emitByte(compiler, OP_NOT); break;
 		case TOKEN_BIT_NOT: emitByte(compiler, OP_BIT_NOT); break;
+		case TOKEN_TYPEOF: emitByte(compiler, OP_TYPEOF); break;
 		default: return; // Unreachable
 	}
 }
@@ -1305,6 +1306,7 @@ ParseRule rules[] = {
   [TOKEN_THROW] = {NULL, NULL, PREC_NONE},
   [TOKEN_TRUE] = {literal, NULL, PREC_NONE},
   [TOKEN_TRY] = {NULL, NULL, PREC_NONE},
+  [TOKEN_TYPEOF] = {unary, NULL, PREC_UNARY},
   [TOKEN_VAR] = {NULL, NULL, PREC_NONE},
   [TOKEN_WHILE] = {NULL, NULL, PREC_NONE},
   [TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
