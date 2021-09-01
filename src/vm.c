@@ -38,6 +38,14 @@ static void buildStringConstantTable(VM* vm) {
 	table[STR_CONSTRUCTOR] = copyString(vm, "constructor", 11);
 	table[STR_MESSAGE] = copyString(vm, "message", 7);
 	table[STR_STACK_TRACE] = copyString(vm, "stackTrace", 10);
+	table[STR_BOOLEAN] = copyString(vm, "boolean", 7);
+	table[STR_NUMBER] = copyString(vm, "number", 6);
+	table[STR_NULL] = copyString(vm, "null", 4);
+	table[STR_FUNCTION] = copyString(vm, "function", 8);
+	table[STR_CLASS] = copyString(vm, "class", 5);
+	table[STR_INSTANCE] = copyString(vm, "instance", 8);
+	table[STR_STRING] = copyString(vm, "string", 6);
+	table[STR_LIST] = copyString(vm, "list", 4);
 
 	vm->stringConstants = table;
 }
@@ -994,6 +1002,37 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			ObjClass* superclassCheck = AS_CLASS(superclass);
 			
 			push(vm, BOOL_VAL(instanceof(AS_INSTANCE(value), superclassCheck)));
+			break;
+		}
+
+		case OP_TYPEOF: {
+			Value value = pop(vm);
+
+			ObjString* string = NULL;
+
+			switch (value.type) {
+				case VAL_BOOL: string = vm->stringConstants[STR_BOOLEAN]; break;
+				case VAL_NUMBER: string = vm->stringConstants[STR_NUMBER]; break;
+				case VAL_NULL: string = vm->stringConstants[STR_NULL]; break;
+				case VAL_OBJ: {
+					switch (AS_OBJ(value)->type) {
+						case OBJ_CLOSURE:
+						case OBJ_BOUND_METHOD:
+						case OBJ_NATIVE:
+						case OBJ_FUNCTION:
+							string = vm->stringConstants[STR_FUNCTION];
+							break;
+						case OBJ_CLASS: string = vm->stringConstants[STR_CLASS]; break;
+						case OBJ_INSTANCE: string = vm->stringConstants[STR_INSTANCE]; break;
+						case OBJ_STRING: string = vm->stringConstants[STR_STRING]; break;
+						case OBJ_LIST: string = vm->stringConstants[STR_LIST]; break;
+					}
+					break;
+				}
+			}
+
+			push(vm, OBJ_VAL(string));
+
 			break;
 		}
 
