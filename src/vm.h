@@ -25,7 +25,7 @@ struct VM {
 	Table strings;
 	Table listMethods;
 	Table stringMethods;
-	ObjString* constructorString;
+	ObjString** stringConstants;
 	ObjClass* objectClass;
 	ObjClass* exceptionClass;
 	Compiler* compiler;
@@ -45,6 +45,13 @@ typedef enum {
 	INTERPRETER_COMPILER_ERR,
 	INTERPRETER_RUNTIME_ERR
 } InterpreterResult;
+
+typedef enum {
+	STR_CONSTRUCTOR,
+	STR_MESSAGE,
+	STR_STACK_TRACE,
+	STR_CONSTANT_COUNT
+} StringConstant;
 
 void initVM(VM* vm);
 void freeVM(VM* vm);

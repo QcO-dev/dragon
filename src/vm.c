@@ -31,6 +31,17 @@ static void initializeStack(VM* vm) {
 	vm->shouldGC = true;
 }
 
+static void buildStringConstantTable(VM* vm) {
+	ObjString** table = ALLOCATE(vm, ObjString*, STR_CONSTANT_COUNT);
+	for (size_t i = 0; i < STR_CONSTANT_COUNT; i++) table[i] = NULL; // Avoid GC Problems
+
+	table[STR_CONSTRUCTOR] = copyString(vm, "constructor", 11);
+	table[STR_MESSAGE] = copyString(vm, "message", 7);
+	table[STR_STACK_TRACE] = copyString(vm, "stackTrace", 10);
+
+	vm->stringConstants = table;
+}
+
 void initVM(VM* vm) {
 	initializeStack(vm);
 	vm->objects = NULL;
@@ -45,9 +56,7 @@ void initVM(VM* vm) {
 	initTable(&vm->globals);
 	initTable(&vm->listMethods);
 	initTable(&vm->stringMethods);
-
-	vm->constructorString = NULL; // GC Call
-	vm->constructorString = copyString(vm, "constructor", 11);
+	buildStringConstantTable(vm);
 
 	ObjString* objectClassName = copyString(vm, "Object", 6);
 	push(vm, OBJ_VAL(objectClassName)); // GC
@@ -70,7 +79,8 @@ void freeVM(VM* vm) {
 	freeTable(vm, &vm->globals);
 	freeTable(vm, &vm->listMethods);
 	freeTable(vm, &vm->stringMethods);
-	vm->constructorString = NULL;
+	FREE_ARRAY(vm, ObjString*, vm->stringConstants, STR_CONSTANT_COUNT);
+	vm->stringConstants = NULL;
 	vm->shouldGC = false;
 	FREE_ARRAY(vm, CallFrame, vm->frames, vm->frameSize);
 	FREE_ARRAY(vm, Value, vm->stack, vm->stackSize);
@@ -106,7 +116,7 @@ static bool throwGeneral(VM* vm, ObjInstance* throwee) {
 	initValueArray(&stackTrace);
 
 	Value message;
-	if (!tableGet(&throwee->fields, copyString(vm, "message", 7), &message)) {
+	if (!tableGet(&throwee->fields, vm->stringConstants[STR_MESSAGE], &message)) {
 		message = NULL_VAL;
 	}
 
@@ -172,7 +182,7 @@ static bool throwGeneral(VM* vm, ObjInstance* throwee) {
 	writeValueArray(vm, &stackTrace, OBJ_VAL(traceLine));
 
 	ObjList* stackTraceList = newList(vm, stackTrace);
-	tableSet(vm, &throwee->fields, copyString(vm, "stackTrace", 10), OBJ_VAL(stackTraceList));
+	tableSet(vm, &throwee->fields, vm->stringConstants[STR_STACK_TRACE], OBJ_VAL(stackTraceList));
 
 	frame->isTry = false;
 	frame->ip = frame->catchJump;
@@ -201,7 +211,7 @@ bool throwException(VM* vm, const char* name, const char* format, ...) {
 
 	ObjInstance* instance = newInstance(vm, AS_CLASS(value));
 	push(vm, OBJ_VAL(instance));
-	tableSet(vm, &instance->fields, copyString(vm, "message", 7), OBJ_VAL(message));
+	tableSet(vm, &instance->fields, vm->stringConstants[STR_MESSAGE], OBJ_VAL(message));
 
 	popN(vm, 2);
 	push(vm, OBJ_VAL(instance));
@@ -298,7 +308,7 @@ bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed) {
 				ObjClass* klass = AS_CLASS(callee);
 				vm->stackTop[-argCount - 1] = OBJ_VAL(newInstance(vm, klass));
 				Value initializer;
-				if (tableGet(&klass->methods, vm->constructorString, &initializer)) {
+				if (tableGet(&klass->methods, vm->stringConstants[STR_CONSTRUCTOR], &initializer)) {
 					return call(vm, AS_CLOSURE(initializer), argCount, argsUsed);
 				}
 				else if (argCount != 0) {
