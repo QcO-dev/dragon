@@ -48,7 +48,6 @@ static void buildStringConstantTable(VM* vm) {
 	table[STR_LIST] = copyString(vm, "list", 4);
 	table[STR_TRUE] = copyString(vm, "true", 4);
 	table[STR_FALSE] = copyString(vm, "false", 5);
-	table[STR_NULL] = copyString(vm, "null", 4);
 	table[STR_NAN] = copyString(vm, "NaN", 3);
 	table[STR_NATIVE_FUNCTION] = copyString(vm, "<native function>", 17);
 
