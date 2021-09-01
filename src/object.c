@@ -246,7 +246,7 @@ ObjString* objectToString(VM* vm, Value value, bool* hasError) {
 		case OBJ_FUNCTION:
 			return functionToString(vm, AS_FUNCTION(value));
 		case OBJ_NATIVE:
-			return copyString(vm, "<native function>", 17);
+			return vm->stringConstants[STR_NATIVE_FUNCTION];
 		case OBJ_STRING:
 			return AS_STRING(value);
 		case OBJ_UPVALUE:
