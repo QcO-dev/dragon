@@ -28,6 +28,7 @@ struct VM {
 	ObjString** stringConstants;
 	ObjClass* objectClass;
 	ObjClass* exceptionClass;
+	ObjClass* iteratorClass;
 	Compiler* compiler;
 	ObjUpvalue* openUpvalues;
 	size_t bytesAllocated;
@@ -62,6 +63,8 @@ typedef enum {
 	STR_FALSE,
 	STR_NAN,
 	STR_NATIVE_FUNCTION,
+	STR_INDEX,
+	STR_DATA,
 	STR_CONSTANT_COUNT
 } StringConstant;
 
