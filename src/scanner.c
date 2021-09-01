@@ -271,7 +271,16 @@ Token scanToken(Scanner* scanner) {
 			return makeToken(scanner, type);
 		}
 		case '&': return makeToken(scanner, match(scanner, '&') ? TOKEN_AND : TOKEN_BIT_AND);
-		case '|': return makeToken(scanner, match(scanner, '|') ? TOKEN_OR : TOKEN_BIT_OR);
+		case '|': {
+			TokenType type = TOKEN_BIT_OR;
+			if (match(scanner, '|')) {
+				type = TOKEN_OR;
+			}
+			else if (match(scanner, '>')) {
+				type = TOKEN_PIPE;
+			}
+			return makeToken(scanner, type);
+		}
 	}
 
 	return errorToken(scanner, "Unexpected character.");

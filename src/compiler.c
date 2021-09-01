@@ -58,6 +58,7 @@ struct Compiler {
 typedef enum {
 	PREC_NONE,
 	PREC_ASSIGNMENT,  // =
+	PREC_PIPE, // |>
 	PREC_OR,  // ||
 	PREC_AND, // &&
 	PREC_BIT_OR, // |
@@ -401,6 +402,11 @@ static void pattern(Compiler* compiler) {
 		expression(compiler);
 		emitByte(compiler, OP_IS);
 	}
+	else if (match(compiler, TOKEN_PIPE)) {
+		expression(compiler);
+		emitByte(compiler, OP_SWAP);
+		emitPair(compiler, OP_CALL, 1);
+	}
 	else if (match(compiler, TOKEN_ELSE)) {
 		emitByte(compiler, OP_POP);
 		emitByte(compiler, OP_TRUE);
@@ -713,6 +719,12 @@ static uint8_t argumentList(Compiler* compiler) {
 	}
 	consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after arguments.");
 	return argCount;
+}
+
+static void pipe(Compiler* compiler, bool canAssign) {
+	parsePrecedence(compiler, PREC_PIPE + 1);
+	emitByte(compiler, OP_SWAP);
+	emitPair(compiler, OP_CALL, 1);
 }
 
 static void call(Compiler* compiler, bool canAssign) {
@@ -1268,6 +1280,7 @@ ParseRule rules[] = {
   [TOKEN_LEFT_SHIFT] = {NULL, binary, PREC_SHIFT},
   [TOKEN_RIGHT_SHIFT] = {NULL, binary, PREC_SHIFT},
   [TOKEN_RIGHT_SHIFT_U] = {NULL, binary, PREC_SHIFT},
+  [TOKEN_PIPE] = {NULL, pipe, PREC_PIPE},
   [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
   [TOKEN_STRING] = {string, NULL, PREC_NONE},
   [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
