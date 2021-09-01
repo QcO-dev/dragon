@@ -53,6 +53,7 @@ struct Compiler {
 	size_t scopeDepth;
 	bool isInLoop;
 	size_t continueJump;
+	size_t breakJump;
 	Parser* parser;
 	VM* vm;
 };
@@ -977,6 +978,7 @@ static void returnStatement(Compiler* compiler) {
 static void whileStatement(Compiler* compiler) {
 	bool wasInLoop = compiler->isInLoop;
 	size_t prevContinueJump = compiler->continueJump;
+	size_t prevBreakJump = compiler->breakJump;
 	compiler->isInLoop = true;
 
 	size_t loopStart = currentChunk(compiler)->count;
@@ -987,6 +989,7 @@ static void whileStatement(Compiler* compiler) {
 	consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after condition");
 
 	size_t exitJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+	compiler->breakJump = exitJump;
 	statement(compiler);
 	emitLoop(compiler, loopStart);
 
@@ -994,11 +997,13 @@ static void whileStatement(Compiler* compiler) {
 
 	compiler->isInLoop = wasInLoop;
 	compiler->continueJump = prevContinueJump;
+	compiler->breakJump = prevBreakJump;
 }
 
 static void forStatement(Compiler* compiler) {
 	bool wasInLoop = compiler->isInLoop;
 	size_t prevContinueJump = compiler->continueJump;
+	size_t prevBreakJump = compiler->breakJump;
 
 	compiler->isInLoop = true;
 
@@ -1021,6 +1026,12 @@ static void forStatement(Compiler* compiler) {
 		consume(compiler, TOKEN_SEMICOLON, "Expected ';' after condition");
 
 		exitJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+		compiler->breakJump = exitJump;
+	}
+	else {
+		emitByte(compiler, OP_TRUE);
+		exitJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+		compiler->breakJump = exitJump;
 	}
 	
 	if (!match(compiler, TOKEN_RIGHT_PAREN)) {
@@ -1044,6 +1055,7 @@ static void forStatement(Compiler* compiler) {
 
 	compiler->isInLoop = wasInLoop;
 	compiler->continueJump = prevContinueJump;
+	compiler->breakJump = prevBreakJump;
 }
 
 static void throwStatement(Compiler* compiler) {
@@ -1149,6 +1161,13 @@ static void continueStatement(Compiler* compiler) {
 	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after continue.");
 }
 
+static void breakStatement(Compiler* compiler) {
+	if (!compiler->isInLoop) error(compiler->parser, "Use of 'break' is not permitted outside of a loop.");
+	emitByte(compiler, OP_FALSE);
+	emitLoop(compiler, compiler->breakJump - 1);
+	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after break.");
+}
+
 static void block(Compiler* compiler) {
 	while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
 		declaration(compiler);
@@ -1180,6 +1199,9 @@ static void statement(Compiler* compiler) {
 	}
 	else if (match(compiler, TOKEN_CONTINUE)) {
 		continueStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_BREAK)) {
+		breakStatement(compiler);
 	}
 	else if (match(compiler, TOKEN_LEFT_BRACE)) {
 		beginScope(compiler);
