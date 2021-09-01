@@ -58,6 +58,7 @@ struct Compiler {
 typedef enum {
 	PREC_NONE,
 	PREC_ASSIGNMENT,  // =
+	PREC_TERNARY, // ?:
 	PREC_PIPE, // |>
 	PREC_OR,  // ||
 	PREC_AND, // &&
@@ -836,6 +837,23 @@ static void or_(Compiler* compiler, bool canAssign) {
 	patchJump(compiler, endJump);
 }
 
+static void ternary(Compiler* compiler, bool canAssign) {
+	size_t elseJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+
+	parsePrecedence(compiler, PREC_TERNARY);
+	
+	size_t trueJump = emitJump(compiler, OP_JUMP);
+	patchJump(compiler, elseJump);
+
+	if (match(compiler, TOKEN_COLON)) {
+		parsePrecedence(compiler, PREC_TERNARY);
+	}
+	else {
+		emitByte(compiler, OP_NULL);
+	}
+	patchJump(compiler, trueJump);
+}
+
 static void switchExpression(Compiler* compiler, bool canAssign) {
 	beginScope(compiler);
 	consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after switch.");
@@ -1282,6 +1300,7 @@ ParseRule rules[] = {
   [TOKEN_RIGHT_SHIFT] = {NULL, binary, PREC_SHIFT},
   [TOKEN_RIGHT_SHIFT_U] = {NULL, binary, PREC_SHIFT},
   [TOKEN_PIPE] = {NULL, pipe, PREC_PIPE},
+  [TOKEN_QUESTION] = {NULL, ternary, PREC_TERNARY},
   [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
   [TOKEN_STRING] = {string, NULL, PREC_NONE},
   [TOKEN_NUMBER] = {number, NULL, PREC_NONE},

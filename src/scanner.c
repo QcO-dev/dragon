@@ -76,7 +76,7 @@ static void skipWhitespace(Scanner* scanner) {
 						if (match(scanner, '*') && match(scanner, '/')) {
 							break;
 						}
-						else if (peek(scanner, '\n')) {
+						else if (peek(scanner) == '\n') {
 							scanner->line++;
 						}
 						advance(scanner);
@@ -244,6 +244,7 @@ Token scanToken(Scanner* scanner) {
 		case '^': return makeToken(scanner, TOKEN_XOR);
 		case '~': return makeToken(scanner, TOKEN_BIT_NOT);
 		case ':': return makeToken(scanner, TOKEN_COLON);
+		case '?': return makeToken(scanner, TOKEN_QUESTION);
 		case '-': return makeToken(scanner, match(scanner, '>') ? TOKEN_ARROW : TOKEN_MINUS);
 		case '!': return makeToken(scanner, match(scanner, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
 		case '=': return makeToken(scanner, match(scanner, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
