@@ -402,6 +402,11 @@ static void pattern(Compiler* compiler) {
 		expression(compiler);
 		emitByte(compiler, OP_IS);
 	}
+	else if (match(compiler, TOKEN_PIPE)) {
+		expression(compiler);
+		emitByte(compiler, OP_SWAP);
+		emitPair(compiler, OP_CALL, 1);
+	}
 	else if (match(compiler, TOKEN_ELSE)) {
 		emitByte(compiler, OP_POP);
 		emitByte(compiler, OP_TRUE);
