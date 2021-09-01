@@ -58,6 +58,7 @@ struct Compiler {
 typedef enum {
 	PREC_NONE,
 	PREC_ASSIGNMENT,  // =
+	PREC_PIPE, // |>
 	PREC_OR,  // ||
 	PREC_AND, // &&
 	PREC_BIT_OR, // |
@@ -715,6 +716,12 @@ static uint8_t argumentList(Compiler* compiler) {
 	return argCount;
 }
 
+static void pipe(Compiler* compiler, bool canAssign) {
+	parsePrecedence(compiler, PREC_PIPE + 1);
+	emitByte(compiler, OP_SWAP);
+	emitPair(compiler, OP_CALL, 1);
+}
+
 static void call(Compiler* compiler, bool canAssign) {
 	uint8_t argCount = argumentList(compiler);
 	emitPair(compiler, OP_CALL, argCount);
@@ -1267,6 +1274,7 @@ ParseRule rules[] = {
   [TOKEN_LEFT_SHIFT] = {NULL, binary, PREC_SHIFT},
   [TOKEN_RIGHT_SHIFT] = {NULL, binary, PREC_SHIFT},
   [TOKEN_RIGHT_SHIFT_U] = {NULL, binary, PREC_SHIFT},
+  [TOKEN_PIPE] = {NULL, pipe, PREC_PIPE},
   [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
   [TOKEN_STRING] = {string, NULL, PREC_NONE},
   [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
