@@ -156,7 +156,11 @@ static TokenType identifierType(Scanner* scanner) {
 				switch (scanner->start[1]) {
 					case 'a': return checkKeyword(scanner, 2, 3, "lse", TOKEN_FALSE);
 					case 'i': return checkKeyword(scanner, 2, 5, "nally", TOKEN_FINALLY);
-					case 'o': return checkKeyword(scanner, 2, 1, "r", TOKEN_FOR);
+					case 'o':
+						if (scanner->current - scanner->start > 3) {
+							return checkKeyword(scanner, 2, 5, "reach", TOKEN_FOREACH);
+						}
+						return checkKeyword(scanner, 2, 1, "r", TOKEN_FOR);
 					case 'u': return checkKeyword(scanner, 2, 6, "nction", TOKEN_FUNCTION);
 				}
 			}

@@ -1058,6 +1058,79 @@ static void forStatement(Compiler* compiler) {
 	compiler->breakJump = prevBreakJump;
 }
 
+static void foreachStatement(Compiler* compiler) {
+	beginScope(compiler);
+
+	// ----------- Parse Clause
+	consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after 'foreach'.");
+	consume(compiler, TOKEN_VAR, "Expected 'var' in foreach clause.");
+
+	uint32_t var = parseVariable(compiler, "Expected variable name.");
+	Token item = compiler->parser->previous;
+	defineVariable(compiler, var);
+
+	emitByte(compiler, OP_NULL);
+
+	uint8_t local = (uint8_t)resolveLocal(compiler, &item);
+	emitByte(compiler, OP_SET_LOCAL);
+	emitByte(compiler, local);
+
+	compiler->locals[local].depth = -1;
+
+	consume(compiler, TOKEN_IN, "Expected 'in' after variable in foreach clause.");
+
+	expression(compiler);
+
+	consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after foreach clause.");
+	defineVariable(compiler, var);
+
+	// ----------- Emit Looping Code
+
+	// expr.iterator()
+	Token iteratorToken = syntheticToken("iterator");
+	uint32_t iterator = identifierConstant(compiler, &iteratorToken);
+
+	emitByte(compiler, OP_INVOKE);
+	encodeConstant(compiler, iterator);
+	emitByte(compiler, 0);
+
+	size_t loopStart = currentChunk(compiler)->count;
+	emitByte(compiler, OP_DUP);
+
+	// iter.more()
+	Token moreToken = syntheticToken("more");
+	uint32_t more = identifierConstant(compiler, &moreToken);
+
+	emitByte(compiler, OP_INVOKE);
+	encodeConstant(compiler, more);
+	emitByte(compiler, 0);
+
+	size_t exitJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+	emitByte(compiler, OP_DUP);
+
+	// iter.next()
+	Token nextToken = syntheticToken("next");
+	uint32_t next = identifierConstant(compiler, &nextToken);
+
+	emitByte(compiler, OP_INVOKE);
+	encodeConstant(compiler, next);
+	emitByte(compiler, 0);
+
+	emitByte(compiler, OP_SET_LOCAL);
+	emitByte(compiler, (uint8_t)resolveLocal(compiler, &item));
+
+	emitByte(compiler, OP_POP);
+
+	// Body
+
+	statement(compiler);
+
+	emitLoop(compiler, loopStart);
+	patchJump(compiler, exitJump);
+
+	endScope(compiler);
+}
+
 static void throwStatement(Compiler* compiler) {
 	if (compiler->type == TYPE_SCRIPT || compiler->type == TYPE_CONSTRUCTOR) {
 		error(compiler->parser, "Cannot use 'throw' in current scope.");
@@ -1187,6 +1260,9 @@ static void statement(Compiler* compiler) {
 	}
 	else if (match(compiler, TOKEN_FOR)) {
 		forStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_FOREACH)) {
+		foreachStatement(compiler);
 	}
 	else if (match(compiler, TOKEN_THROW)) {
 		throwStatement(compiler);
@@ -1364,6 +1440,7 @@ ParseRule rules[] = {
   [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
   [TOKEN_FINALLY] = {NULL, NULL, PREC_NONE},
   [TOKEN_FOR] = {NULL, NULL, PREC_NONE},
+  [TOKEN_FOREACH] = {NULL, NULL, PREC_NONE},
   [TOKEN_FUNCTION] = {NULL, NULL, PREC_NONE},
   [TOKEN_IF] = {NULL, NULL, PREC_NONE},
   [TOKEN_IS] = {NULL, binary, PREC_EQUALITY},
