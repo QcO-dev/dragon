@@ -9,6 +9,7 @@
 #include "exception.h"
 #include "list.h"
 #include "strings.h"
+#include "iterator.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -50,6 +51,8 @@ static void buildStringConstantTable(VM* vm) {
 	table[STR_FALSE] = copyString(vm, "false", 5);
 	table[STR_NAN] = copyString(vm, "NaN", 3);
 	table[STR_NATIVE_FUNCTION] = copyString(vm, "<native function>", 17);
+	table[STR_INDEX] = copyString(vm, "index", 5);
+	table[STR_DATA] = copyString(vm, "data", 4);
 
 	vm->stringConstants = table;
 }
@@ -77,6 +80,13 @@ void initVM(VM* vm) {
 	tableSet(vm, &vm->globals, objectClassName, OBJ_VAL(vm->objectClass));
 	pop(vm);
 
+	ObjString* iteratorClassName = copyString(vm, "Iterator", 8);
+	push(vm, OBJ_VAL(iteratorClassName)); // GC
+	vm->iteratorClass = NULL;
+	vm->iteratorClass = newClass(vm, iteratorClassName);
+	tableSet(vm, &vm->globals, iteratorClassName, OBJ_VAL(vm->iteratorClass));
+	pop(vm);
+
 	tableSet(vm, &vm->globals, copyString(vm, "NaN", 3), NUMBER_VAL(nan("0")));
 	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
 	defineGlobalNatives(vm);
@@ -84,6 +94,7 @@ void initVM(VM* vm) {
 	defineExceptionClasses(vm);
 	defineListMethods(vm);
 	defineStringMethods(vm);
+	defineIteratorMethods(vm);
 }
 
 void freeVM(VM* vm) {
@@ -318,9 +329,16 @@ bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed) {
 			}
 			case OBJ_CLASS: {
 				ObjClass* klass = AS_CLASS(callee);
-				vm->stackTop[-argCount - 1] = OBJ_VAL(newInstance(vm, klass));
+				Value instance = OBJ_VAL(newInstance(vm, klass));
+				vm->stackTop[-argCount - 1] = instance;
 				Value initializer;
 				if (tableGet(&klass->methods, vm->stringConstants[STR_CONSTRUCTOR], &initializer)) {
+					if (IS_NATIVE(initializer)) {
+						ObjNative* native = AS_NATIVE(initializer);
+						native->isBound = true;
+						native->bound = instance;
+						return callValue(vm, OBJ_VAL(native), argCount, argsUsed);
+					}
 					return call(vm, AS_CLOSURE(initializer), argCount, argsUsed);
 				}
 				else if (argCount != 0) {

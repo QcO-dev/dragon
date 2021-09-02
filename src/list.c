@@ -1,5 +1,6 @@
 #include "list.h"
 #include "natives.h"
+#include "iterator.h"
 #include <stdlib.h>
 #include <math.h>
 
@@ -220,6 +221,16 @@ static Value listIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* ar
 	return NUMBER_VAL(-1);
 }
 
+static Value listIteratorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+	Value iterator = OBJ_VAL(newInstance(vm, vm->iteratorClass));
+
+	push(vm, *bound);
+	iteratorConstructorNative(vm, &iterator, 1, bound, hasError);
+	if (*hasError) return NULL_VAL;
+
+	return iterator;
+}
+
 static Value listLastIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	ObjList* list = AS_LIST(*bound);
 
@@ -374,6 +385,7 @@ void defineListMethods(VM* vm) {
 	defineNative(vm, &vm->listMethods, "fill", 1, listFillNative);
 	defineNative(vm, &vm->listMethods, "forEach", 1, listForEachNative);
 	defineNative(vm, &vm->listMethods, "indexOf", 1, listIndexOfNative);
+	defineNative(vm, &vm->listMethods, "iterator", 0, listIteratorNative);
 	defineNative(vm, &vm->listMethods, "lastIndexOf", 1, listLastIndexOfNative);
 	defineNative(vm, &vm->listMethods, "length", 0, listLengthNative);
 	defineNative(vm, &vm->listMethods, "map", 1, listMapNative);

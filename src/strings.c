@@ -1,6 +1,7 @@
 #include "strings.h"
 #include "natives.h"
 #include "memory.h"
+#include "iterator.h"
 #include <string.h>
 #include <math.h>
 
@@ -92,6 +93,16 @@ static Value stringIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* 
 	size_t index = ptr - string->chars;
 
 	return NUMBER_VAL((double)index);
+}
+
+static Value stringIteratorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+	Value iterator = OBJ_VAL(newInstance(vm, vm->iteratorClass));
+
+	push(vm, *bound);
+	iteratorConstructorNative(vm, &iterator, 1, bound, hasError);
+	if (*hasError) return NULL_VAL;
+
+	return iterator;
 }
 
 static Value stringLastIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
@@ -206,6 +217,7 @@ void defineStringMethods(VM* vm) {
 	defineNative(vm, &vm->stringMethods, "concat", 1, stringConcatNative);
 	defineNative(vm, &vm->stringMethods, "endsWith", 1, stringEndsWithNative);
 	defineNative(vm, &vm->stringMethods, "indexOf", 1, stringIndexOfNative);
+	defineNative(vm, &vm->stringMethods, "iterator", 0, stringIteratorNative);
 	defineNative(vm, &vm->stringMethods, "lastIndexOf", 1, stringLastIndexOfNative);
 	defineNative(vm, &vm->stringMethods, "length", 0, stringLengthNative);
 	defineNative(vm, &vm->stringMethods, "repeat", 1, stringRepeatNative);
