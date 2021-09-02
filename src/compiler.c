@@ -1059,7 +1059,11 @@ static void forStatement(Compiler* compiler) {
 }
 
 static void foreachStatement(Compiler* compiler) {
+	bool wasLoop = compiler->isInLoop;
+	size_t prevContinueJump = compiler->continueJump;
+
 	beginScope(compiler);
+	compiler->isInLoop = true;
 
 	// ----------- Parse Clause
 	consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after 'foreach'.");
@@ -1095,6 +1099,8 @@ static void foreachStatement(Compiler* compiler) {
 	emitByte(compiler, 0);
 
 	size_t loopStart = currentChunk(compiler)->count;
+	compiler->continueJump = loopStart;
+
 	emitByte(compiler, OP_DUP);
 
 	// iter.more()
@@ -1129,6 +1135,9 @@ static void foreachStatement(Compiler* compiler) {
 	patchJump(compiler, exitJump);
 
 	endScope(compiler);
+
+	compiler->isInLoop = wasLoop;
+	compiler->continueJump = prevContinueJump;
 }
 
 static void throwStatement(Compiler* compiler) {
