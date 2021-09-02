@@ -1061,6 +1061,7 @@ static void forStatement(Compiler* compiler) {
 static void foreachStatement(Compiler* compiler) {
 	bool wasLoop = compiler->isInLoop;
 	size_t prevContinueJump = compiler->continueJump;
+	size_t prevBreakJump = compiler->breakJump;
 
 	beginScope(compiler);
 	compiler->isInLoop = true;
@@ -1112,6 +1113,8 @@ static void foreachStatement(Compiler* compiler) {
 	emitByte(compiler, 0);
 
 	size_t exitJump = emitJump(compiler, OP_JUMP_IF_FALSE);
+	compiler->breakJump = exitJump;
+
 	emitByte(compiler, OP_DUP);
 
 	// iter.next()
@@ -1138,6 +1141,7 @@ static void foreachStatement(Compiler* compiler) {
 
 	compiler->isInLoop = wasLoop;
 	compiler->continueJump = prevContinueJump;
+	compiler->breakJump = prevBreakJump;
 }
 
 static void throwStatement(Compiler* compiler) {
