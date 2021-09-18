@@ -17,28 +17,29 @@ static size_t findMinrun(size_t n) {
 	return n + r;
 }
 
-static double compare(VM* vm, Value a, Value b, Value comparator, bool* hasError) {
+static double compare(VM* vm, Value a, Value b, Value comparator, bool* hasError, ObjInstance** exception) {
 	push(vm, a);
 	push(vm, b);
 
-	Value result = callDragonFromNative(vm, NULL, comparator, 2, hasError);
-	if (*hasError) return false;
+	Value result = callDragonFromNative(vm, NULL, comparator, 2, hasError, exception);
+	if (*hasError) return 0;
 
 	if (!IS_NUMBER(result)) {
-		*hasError = !throwException(vm, "TypeException", "Expected comparator to return a number, in sort.");
-		return false;
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Expected comparator to return a number, in sort.");
+		return 0;
 	}
 
 	return AS_NUMBER(result);
 }
 
-static ObjList* insertionSort(VM* vm, ObjList* list, intmax_t left, intmax_t right, Value comparator, bool* hasError) {
+static ObjList* insertionSort(VM* vm, ObjList* list, intmax_t left, intmax_t right, Value comparator, bool* hasError, ObjInstance** exception) {
 	ValueArray arr = list->items;
 	for (intmax_t i = left + 1; i <= right; i++) {
 		Value element = arr.values[i];
 		intmax_t j = i - 1;
 
-		while (j >= left && compare(vm, element, arr.values[j], comparator, hasError) < 0 ) {
+		while (j >= left && compare(vm, element, arr.values[j], comparator, hasError, exception) < 0 ) {
 			arr.values[j + 1] = arr.values[j];
 			j--;
 		}
@@ -48,7 +49,7 @@ static ObjList* insertionSort(VM* vm, ObjList* list, intmax_t left, intmax_t rig
 	return list;
 }
 
-static void merge(VM* vm, ObjList* list, size_t l, size_t m, size_t r, Value comparator, bool* hasError) {
+static void merge(VM* vm, ObjList* list, size_t l, size_t m, size_t r, Value comparator, bool* hasError, ObjInstance** exception) {
 	ValueArray array = list->items;
 	size_t arrayLength1 = m - l + 1;
 	size_t arrayLength2 = r - m;
@@ -70,7 +71,7 @@ static void merge(VM* vm, ObjList* list, size_t l, size_t m, size_t r, Value com
 	size_t k = l;
 
 	while (j < arrayLength2 && i < arrayLength1) {
-		if (compare(vm, left.values[i], right.values[j], comparator, hasError) <= 0) {
+		if (compare(vm, left.values[i], right.values[j], comparator, hasError, exception) <= 0) {
 			array.values[k] = left.values[i];
 			i++;
 		}
@@ -97,7 +98,7 @@ static void merge(VM* vm, ObjList* list, size_t l, size_t m, size_t r, Value com
    List Methods
 */
 
-static Value listAnyNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listAnyNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	for (size_t i = 0; i < list->items.count; i++) {
@@ -107,18 +108,19 @@ static Value listAnyNative(VM* vm, Value* bound, uint8_t argCount, Value* args, 
 	return BOOL_VAL(false);
 }
 
-static Value listClearNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listClearNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 	list->items.count = 0;
 	return OBJ_VAL(list);
 }
 
-static Value listConcatNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listConcatNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* listA = AS_LIST(*bound);
 
 	if (!IS_LIST(args[0])) {
-		*hasError = !throwException(vm, "TypeException", "Expected list as first argument in concat.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Expected list as first argument in concat.");
+		return NULL_VAL;
 	}
 
 	ValueArray array;
@@ -138,7 +140,7 @@ static Value listConcatNative(VM* vm, Value* bound, uint8_t argCount, Value* arg
 	return OBJ_VAL(concatted);
 }
 
-static Value listEveryNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listEveryNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	for (size_t i = 0; i < list->items.count; i++) {
@@ -148,12 +150,13 @@ static Value listEveryNative(VM* vm, Value* bound, uint8_t argCount, Value* args
 	return BOOL_VAL(true);
 }
 
-static Value listExtendNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listExtendNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* listA = AS_LIST(*bound);
 
 	if (!IS_LIST(args[0])) {
-		*hasError = !throwException(vm, "TypeException", "Expected list as first argument in extend.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Expected list as first argument in extend.");
+		return NULL_VAL;
 	}
 
 	ObjList* listB = AS_LIST(args[0]);
@@ -164,7 +167,7 @@ static Value listExtendNative(VM* vm, Value* bound, uint8_t argCount, Value* arg
 	return OBJ_VAL(listA);
 }
 
-static Value listFilterNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listFilterNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	ValueArray array;
@@ -176,7 +179,7 @@ static Value listFilterNative(VM* vm, Value* bound, uint8_t argCount, Value* arg
 		push(vm, value);
 		push(vm, NUMBER_VAL((double)i));
 		push(vm, OBJ_VAL(list));
-		Value condition = callDragonFromNative(vm, NULL, args[0], 3, hasError);
+		Value condition = callDragonFromNative(vm, NULL, args[0], 3, hasError, exception);
 		if (*hasError) return NULL_VAL;
 
 		if (!isFalsey(condition)) {
@@ -190,7 +193,7 @@ static Value listFilterNative(VM* vm, Value* bound, uint8_t argCount, Value* arg
 	return OBJ_VAL(filteredList);
 }
 
-static Value listFillNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listFillNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	Value filler = args[0];
@@ -200,19 +203,19 @@ static Value listFillNative(VM* vm, Value* bound, uint8_t argCount, Value* args,
 	return OBJ_VAL(list);
 }
 
-static Value listForEachNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listForEachNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 	for (size_t i = 0; i < list->items.count; i++) {
 		push(vm, list->items.values[i]);
 		push(vm, NUMBER_VAL((double)i));
 		push(vm, OBJ_VAL(list));
-		callDragonFromNative(vm, NULL, args[0], 3, hasError);
+		callDragonFromNative(vm, NULL, args[0], 3, hasError, exception);
 		if (*hasError) break;
 	}
 	return NULL_VAL;
 }
 
-static Value listIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	for (size_t i = 0; i < list->items.count; i++) {
@@ -221,17 +224,17 @@ static Value listIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* ar
 	return NUMBER_VAL(-1);
 }
 
-static Value listIteratorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listIteratorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	Value iterator = OBJ_VAL(newInstance(vm, vm->iteratorClass));
 
 	push(vm, *bound);
-	iteratorConstructorNative(vm, &iterator, 1, bound, hasError);
+	iteratorConstructorNative(vm, &iterator, 1, bound, hasError, exception);
 	if (*hasError) return NULL_VAL;
 
 	return iterator;
 }
 
-static Value listLastIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listLastIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	for (size_t i = list->items.count; i > 0; i--) {
@@ -240,11 +243,11 @@ static Value listLastIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value
 	return NUMBER_VAL(-1);
 }
 
-static Value listLengthNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listLengthNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	return NUMBER_VAL((double)AS_LIST(*bound)->items.count);
 }
 
-static Value listMapNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listMapNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	ValueArray array;
@@ -254,7 +257,7 @@ static Value listMapNative(VM* vm, Value* bound, uint8_t argCount, Value* args, 
 		push(vm, list->items.values[i]);
 		push(vm, NUMBER_VAL((double)i));
 		push(vm, OBJ_VAL(list));
-		Value mapped = callDragonFromNative(vm, NULL, args[0], 3, hasError);
+		Value mapped = callDragonFromNative(vm, NULL, args[0], 3, hasError, exception);
 		if (*hasError) return NULL_VAL;
 		push(vm, mapped);
 		writeValueArray(vm, &array, mapped);
@@ -264,17 +267,19 @@ static Value listMapNative(VM* vm, Value* bound, uint8_t argCount, Value* args, 
 	return OBJ_VAL(mappedList);
 }
 
-static Value listOfLengthNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listOfLengthNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	if (!IS_NUMBER(args[0])) {
-		*hasError = !throwException(vm, "TypeException", "Expected number as first argument in ofLength.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Expected number as first argument in ofLength.");
+		return NULL_VAL;
 	}
 
 	if (floor(AS_NUMBER(args[0])) != AS_NUMBER(args[0])) {
-		*hasError = !throwException(vm, "TypeException", "Expected integer as first argument in ofLength.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Expected integer as first argument in ofLength.");
+		return NULL_VAL;
 	}
 
 	intmax_t size = (intmax_t)AS_NUMBER(args[0]);
@@ -300,18 +305,18 @@ static Value listOfLengthNative(VM* vm, Value* bound, uint8_t argCount, Value* a
 	return OBJ_VAL(ofLength);
 }
 
-static Value listPopNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listPopNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 	return list->items.values[--list->items.count];
 }
 
-static Value listPushNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listPushNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 	writeValueArray(vm, &list->items, args[0]);
 	return args[0];
 }
 
-static Value listReduceNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listReduceNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	if (list->items.count == 0) return NULL_VAL;
@@ -325,13 +330,13 @@ static Value listReduceNative(VM* vm, Value* bound, uint8_t argCount, Value* arg
 		push(vm, NUMBER_VAL((double)i));
 		push(vm, OBJ_VAL(list));
 
-		previousValue = callDragonFromNative(vm, NULL, args[0], 4, hasError);
+		previousValue = callDragonFromNative(vm, NULL, args[0], 4, hasError, exception);
 		if (*hasError) break;
 	}
 	return previousValue;
 }
 
-static Value listReverseNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listReverseNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	ValueArray array;
@@ -347,7 +352,7 @@ static Value listReverseNative(VM* vm, Value* bound, uint8_t argCount, Value* ar
 /*
   Implements the 'timsort' algorithm
 */
-static Value listSortNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value listSortNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjList* list = AS_LIST(*bound);
 
 	Value comparator = args[0];
@@ -358,7 +363,7 @@ static Value listSortNative(VM* vm, Value* bound, uint8_t argCount, Value* args,
 
 	for (size_t start = 0; start < n; start += minrun) {
 		size_t end = min(start + minrun - 1, n - 1);
-		insertionSort(vm, list, start, end, comparator, hasError);
+		insertionSort(vm, list, start, end, comparator, hasError, exception);
 	}
 
 	size_t size = minrun;
@@ -367,7 +372,7 @@ static Value listSortNative(VM* vm, Value* bound, uint8_t argCount, Value* args,
 		for (size_t left = 0; left < n; left += 2 * size) {
 			size_t mid = min(n - 1, left + size - 1);
 			size_t right = min((left + 2 * size - 1), n - 1);
-			merge(vm, list, left, mid, right, comparator, hasError);
+			merge(vm, list, left, mid, right, comparator, hasError, exception);
 		}
 		size *= 2;
 	}

@@ -165,7 +165,7 @@ ObjString* functionToString(VM* vm, ObjFunction* function) {
 	return makeStringf(vm, "<function %s>", function->name->chars);
 }
 
-ObjString* listToString(VM* vm, ObjList* list, bool* hasError, bool repr) {
+ObjString* listToString(VM* vm, ObjList* list, bool* hasError, ObjInstance** exception, bool repr) {
 	size_t stringLength = 1; // [
 
 	for (size_t i = 0; i < list->items.count; i++) {
@@ -175,7 +175,7 @@ ObjString* listToString(VM* vm, ObjList* list, bool* hasError, bool repr) {
 		else {
 			Value v = list->items.values[i];
 			if(IS_STRING(v)) stringLength += valueToRepr(vm, v)->length;
-			else stringLength += valueToString(vm, v, hasError)->length;
+			else stringLength += valueToString(vm, v, hasError, exception)->length;
 		}
 		if (i != list->items.count - 1) stringLength += 2;
 	}
@@ -196,7 +196,7 @@ ObjString* listToString(VM* vm, ObjList* list, bool* hasError, bool repr) {
 		else {
 			Value v = list->items.values[i];
 			if (IS_STRING(v)) str = valueToRepr(vm, v);
-			else str = valueToString(vm, v, hasError);
+			else str = valueToString(vm, v, hasError, exception);
 		}
 		memcpy(&buffer[bufferIndex], str->chars, str->length);
 		bufferIndex += str->length;
@@ -211,20 +211,22 @@ ObjString* listToString(VM* vm, ObjList* list, bool* hasError, bool repr) {
 	return takeString(vm, buffer, stringLength);
 }
 
-ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError) {
+ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError, ObjInstance** exception) {
 	Value method;
 	if (tableGet(&instance->fields, copyString(vm, "toString", 8), &method)) {
-		Value stringForm = callDragonFromNative(vm, &OBJ_VAL(instance), method, 0, hasError);
+		Value stringForm = callDragonFromNative(vm, &OBJ_VAL(instance), method, 0, hasError, exception);
 		if (!IS_STRING(stringForm)) { 
-			*hasError = !throwException(vm, "TypeException", "Instance's 'toString' method must return a string.");
+			*hasError = true;
+			*exception = makeException(vm, "TypeException", "Instance's 'toString' method must return a string.");
 			return NULL;
 		}
 		return AS_STRING(stringForm);
 	}
 	else if (tableGet(&instance->klass->methods, copyString(vm, "toString", 8), &method)) {
-		Value stringForm = callDragonFromNative(vm, &OBJ_VAL(instance), method, 0, hasError);
+		Value stringForm = callDragonFromNative(vm, &OBJ_VAL(instance), method, 0, hasError, exception);
 		if (!IS_STRING(stringForm)) {
-			*hasError = !throwException(vm, "TypeException", "Instance's 'toString' method must return a string.");
+			*hasError = true;
+			*exception = makeException(vm, "TypeException", "Instance's 'toString' method must return a string.");
 			return NULL;
 		}
 		return AS_STRING(stringForm);
@@ -233,18 +235,18 @@ ObjString* instanceToString(VM* vm, ObjInstance* instance, bool* hasError) {
 	return makeStringf(vm, "<instance %s>", instance->klass->name->chars);
 }
 
-ObjString* objectToString(VM* vm, Value value, bool* hasError) {
+ObjString* objectToString(VM* vm, Value value, bool* hasError, ObjInstance** exception) {
 	switch (OBJ_TYPE(value)) {
 		case OBJ_BOUND_METHOD:
 			return functionToString(vm, AS_BOUND_METHOD(value)->method->function);
 		case OBJ_CLASS:
 			return makeStringf(vm, "<class %s>", AS_CLASS(value)->name->chars);
 		case OBJ_INSTANCE:
-			return instanceToString(vm, AS_INSTANCE(value), hasError);
+			return instanceToString(vm, AS_INSTANCE(value), hasError, exception);
 		case OBJ_CLOSURE:
 			return functionToString(vm, AS_CLOSURE(value)->function);
 		case OBJ_LIST:
-			return listToString(vm, AS_LIST(value), hasError, false);
+			return listToString(vm, AS_LIST(value), hasError, false, exception);
 		case OBJ_FUNCTION:
 			return functionToString(vm, AS_FUNCTION(value));
 		case OBJ_NATIVE:
@@ -318,9 +320,9 @@ ObjString* objectToRepr(VM* vm, Value value) {
 		case OBJ_NATIVE:
 		case OBJ_UPVALUE:
 			// The above types cannot fail.
-			return objectToString(vm, value, NULL);
+			return objectToString(vm, value, NULL, NULL);
 		case OBJ_LIST:
-			return listToString(vm, AS_LIST(value), NULL, true);
+			return listToString(vm, AS_LIST(value), NULL, true, NULL);
 		case OBJ_INSTANCE:
 			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
 		case OBJ_STRING:
@@ -329,7 +331,7 @@ ObjString* objectToRepr(VM* vm, Value value) {
 	}
 }
 
-static Value keysNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value keysNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ValueArray array;
 	initValueArray(&array);
 
@@ -346,7 +348,7 @@ static Value keysNative(VM* vm, Value* bound, uint8_t argCount, Value* args, boo
 	return OBJ_VAL(list);
 }
 
-static Value valuesNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value valuesNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ValueArray array;
 	initValueArray(&array);
 
@@ -363,7 +365,7 @@ static Value valuesNative(VM* vm, Value* bound, uint8_t argCount, Value* args, b
 	return OBJ_VAL(list);
 }
 
-static Value entriesNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value entriesNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ValueArray array;
 	initValueArray(&array);
 
@@ -391,14 +393,15 @@ static Value entriesNative(VM* vm, Value* bound, uint8_t argCount, Value* args, 
 	return OBJ_VAL(entries);
 }
 
-static Value hasPropertyNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value hasPropertyNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjInstance* instance = AS_INSTANCE(*bound);
 
 	Value propertyValue = args[0];
 
 	if (!IS_STRING(propertyValue)) {
-		*hasError = !throwException(vm, "TypeException", "Property name must be a string.");
-		return pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Property name must be a string.");
+		return NULL_VAL;
 	}
 
 	ObjString* propertyName = AS_STRING(propertyValue);
@@ -407,10 +410,10 @@ static Value hasPropertyNative(VM* vm, Value* bound, uint8_t argCount, Value* ar
 	return BOOL_VAL(tableGet(&instance->fields, propertyName, &_));
 }
 
-static Value toStringNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value toStringNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjInstance* instance = AS_INSTANCE(*bound);
 
-	ObjList* list = AS_LIST(entriesNative(vm, bound, 0, NULL, hasError));
+	ObjList* list = AS_LIST(entriesNative(vm, bound, 0, NULL, hasError, exception));
 
 	push(vm, OBJ_VAL(list)); // GC
 

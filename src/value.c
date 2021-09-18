@@ -49,7 +49,7 @@ ObjString* numberToString(VM* vm, double value) {
 	return makeStringf(vm, "%g", value);
 }
 
-ObjString* valueToString(VM* vm, Value value, bool* hasError) {
+ObjString* valueToString(VM* vm, Value value, bool* hasError, ObjInstance** exception) {
 	switch (value.type) {
 		case VAL_BOOL:
 			return vm->stringConstants[AS_BOOL(value) ? STR_TRUE : STR_FALSE];
@@ -58,7 +58,7 @@ ObjString* valueToString(VM* vm, Value value, bool* hasError) {
 		case VAL_NUMBER:
 			return numberToString(vm, AS_NUMBER(value));
 		case VAL_OBJ:
-			return objectToString(vm, value, hasError);
+			return objectToString(vm, value, hasError, exception);
 	}
 }
 
@@ -68,7 +68,7 @@ ObjString* valueToRepr(VM* vm, Value value) {
 		case VAL_NULL:
 		case VAL_NUMBER:
 			// The above types cannot fail.
-			return valueToString(vm, value, NULL);
+			return valueToString(vm, value, NULL, NULL);
 		case VAL_OBJ:
 			return objectToRepr(vm, value);
 	}

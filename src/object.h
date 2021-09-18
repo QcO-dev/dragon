@@ -34,7 +34,7 @@ struct ObjFunction {
 	ObjString* name;
 };
 
-typedef Value(*NativeFn)(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError);
+typedef Value(*NativeFn)(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception);
 
 typedef struct {
 	Obj obj;
@@ -78,11 +78,11 @@ typedef struct ObjClass {
 	struct ObjClass* superclass;
 } ObjClass;
 
-typedef struct {
+struct ObjInstance {
 	Obj obj;
 	ObjClass* klass;
 	Table fields;
-} ObjInstance;
+};
 
 typedef struct {
 	Obj obj;
@@ -102,7 +102,7 @@ ObjString* takeString(VM* vm, char* chars, size_t length);
 ObjString* copyString(VM* vm, const char* chars, size_t length);
 ObjString* makeStringf(VM* vm, const char* format, ...);
 ObjString* makeStringvf(VM* vm, const char* format, va_list args);
-ObjString* objectToString(VM* vm, Value value, bool* hasError);
+ObjString* objectToString(VM* vm, Value value, bool* hasError, ObjInstance** exception);
 ObjString* objectToRepr(VM* vm, Value value);
 void defineObjectNatives(VM* vm);
 
