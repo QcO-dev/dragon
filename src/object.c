@@ -60,6 +60,7 @@ ObjFunction* newFunction(VM* vm) {
 	function->upvalueCount = 0;
 	function->name = NULL;
 	function->isLambda = false;
+	function->varargs = false;
 	initChunk(&function->chunk);
 	return function;
 }

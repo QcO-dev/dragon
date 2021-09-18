@@ -30,6 +30,7 @@ struct ObjFunction {
 	size_t upvalueCount;
 	Chunk chunk;
 	bool isLambda;
+	bool varargs;
 	ObjString* name;
 };
 
