@@ -24,6 +24,7 @@ typedef enum {
 	OP_SET_INDEX,
 	OP_GET_SUPER,
 	OP_DUP,
+	OP_DUP_X2,
 	OP_SWAP,
 	OP_POP,
 	OP_NOT,

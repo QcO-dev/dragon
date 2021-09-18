@@ -826,6 +826,13 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_POP: pop(vm); break;
 		case OP_DUP: push(vm, peek(vm, 0)); break;
+		
+		case OP_DUP_X2: {
+			// x, y -> x, y, x, y
+			push(vm, peek(vm, 1));
+			push(vm, peek(vm, 1));
+			break;
+		}
 
 		case OP_SWAP: {
 			Value a = pop(vm);

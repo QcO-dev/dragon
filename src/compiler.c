@@ -841,6 +841,17 @@ static void index(Compiler* compiler, bool canAssign) {
 		expression(compiler);
 		emitByte(compiler, OP_SET_INDEX);
 	}
+	else if (canAssign && isInplaceOperator(compiler)) {
+		TokenType op = compiler->parser->previous.type;
+
+		emitByte(compiler, OP_DUP_X2);
+		emitByte(compiler, OP_GET_INDEX);
+
+		expression(compiler);
+		inplaceOperator(compiler, op);
+
+		emitByte(compiler, OP_SET_INDEX);
+	}
 	else {
 		emitByte(compiler, OP_GET_INDEX);
 	}
