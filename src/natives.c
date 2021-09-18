@@ -36,17 +36,12 @@ static Value sqrtNative(VM* vm, Value* bound, uint8_t argCount, Value* args, boo
 	return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
 }
 
-static Value callNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
-	return callDragonFromNative(vm, bound, args[0], 0, hasError);
-}
-
 void defineGlobalNatives(VM* vm) {
-	defineNative(vm, &vm->globals, "toString", 1, toStringNative);
-	defineNative(vm, &vm->globals, "repr", 1, reprNative);
-	defineNative(vm, &vm->globals, "clock", 0, clockNative);
-	defineNative(vm, &vm->globals, "sqrt", 1, sqrtNative);
-	defineNative(vm, &vm->globals, "call", 1, callNative);
-	defineNative(vm, &vm->globals, "print", 1, printNative);
+	defineNative(vm, &vm->globals, "toString", 1, false, toStringNative);
+	defineNative(vm, &vm->globals, "repr", 1, false, reprNative);
+	defineNative(vm, &vm->globals, "clock", 0, false, clockNative);
+	defineNative(vm, &vm->globals, "sqrt", 1, false, sqrtNative);
+	defineNative(vm, &vm->globals, "print", 0, true, printNative);
 }
 
 /*
@@ -88,9 +83,9 @@ Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, 
 	}
 }
 
-void defineNative(VM* vm, Table* table, const char* name, size_t arity, NativeFn function) {
+void defineNative(VM* vm, Table* table, const char* name, size_t arity, bool varargs, NativeFn function) {
 	push(vm, OBJ_VAL(copyString(vm, name, strlen(name))));
-	push(vm, OBJ_VAL(newNative(vm, arity, function)));
+	push(vm, OBJ_VAL(newNative(vm, arity, function, varargs)));
 	tableSet(vm, table, AS_STRING(vm->stack[0]), vm->stack[1]);
 	pop(vm);
 	pop(vm);

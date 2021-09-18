@@ -214,13 +214,13 @@ static Value stringSubstringNative(VM* vm, Value* bound, uint8_t argCount, Value
 }
 
 void defineStringMethods(VM* vm) {
-	defineNative(vm, &vm->stringMethods, "concat", 1, stringConcatNative);
-	defineNative(vm, &vm->stringMethods, "endsWith", 1, stringEndsWithNative);
-	defineNative(vm, &vm->stringMethods, "indexOf", 1, stringIndexOfNative);
-	defineNative(vm, &vm->stringMethods, "iterator", 0, stringIteratorNative);
-	defineNative(vm, &vm->stringMethods, "lastIndexOf", 1, stringLastIndexOfNative);
-	defineNative(vm, &vm->stringMethods, "length", 0, stringLengthNative);
-	defineNative(vm, &vm->stringMethods, "repeat", 1, stringRepeatNative);
-	defineNative(vm, &vm->stringMethods, "startsWith", 1, stringStartsWithNative);
-	defineNative(vm, &vm->stringMethods, "substring", 2, stringSubstringNative);
+	defineNative(vm, &vm->stringMethods, "concat", 1, false, stringConcatNative);
+	defineNative(vm, &vm->stringMethods, "endsWith", 1, false, stringEndsWithNative);
+	defineNative(vm, &vm->stringMethods, "indexOf", 1, false, stringIndexOfNative);
+	defineNative(vm, &vm->stringMethods, "iterator", 0, false, stringIteratorNative);
+	defineNative(vm, &vm->stringMethods, "lastIndexOf", 1, false, stringLastIndexOfNative);
+	defineNative(vm, &vm->stringMethods, "length", 0, false, stringLengthNative);
+	defineNative(vm, &vm->stringMethods, "repeat", 1, false, stringRepeatNative);
+	defineNative(vm, &vm->stringMethods, "startsWith", 1, false, stringStartsWithNative);
+	defineNative(vm, &vm->stringMethods, "substring", 2, false, stringSubstringNative);
 }

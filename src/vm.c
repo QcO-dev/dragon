@@ -387,8 +387,10 @@ bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed) {
 				ObjNative* native = AS_NATIVE(callee);
 
 				if (argCount != native->arity) {
-					pop(vm);
-					return throwException(vm, "ArityException", "Expected %zu argument(s) but got %u.", native->arity, argCount);
+					if (!(native->varargs && argCount > native->arity)) {
+						pop(vm);
+						return throwException(vm, "ArityException", "Expected %zu argument(s) but got %u.", native->arity, argCount);
+					}
 				}
 
 				NativeFn nativeFunction = native->function;

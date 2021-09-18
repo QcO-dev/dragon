@@ -376,23 +376,23 @@ static Value listSortNative(VM* vm, Value* bound, uint8_t argCount, Value* args,
 }
 
 void defineListMethods(VM* vm) {
-	defineNative(vm, &vm->listMethods, "any", 0, listAnyNative);
-	defineNative(vm, &vm->listMethods, "clear", 0, listClearNative);
-	defineNative(vm, &vm->listMethods, "concat", 1, listConcatNative);
-	defineNative(vm, &vm->listMethods, "every", 0, listEveryNative);
-	defineNative(vm, &vm->listMethods, "extend", 1, listExtendNative);
-	defineNative(vm, &vm->listMethods, "filter", 1, listFilterNative);
-	defineNative(vm, &vm->listMethods, "fill", 1, listFillNative);
-	defineNative(vm, &vm->listMethods, "forEach", 1, listForEachNative);
-	defineNative(vm, &vm->listMethods, "indexOf", 1, listIndexOfNative);
-	defineNative(vm, &vm->listMethods, "iterator", 0, listIteratorNative);
-	defineNative(vm, &vm->listMethods, "lastIndexOf", 1, listLastIndexOfNative);
-	defineNative(vm, &vm->listMethods, "length", 0, listLengthNative);
-	defineNative(vm, &vm->listMethods, "map", 1, listMapNative);
-	defineNative(vm, &vm->listMethods, "ofLength", 1, listOfLengthNative);
-	defineNative(vm, &vm->listMethods, "pop", 0, listPopNative);
-	defineNative(vm, &vm->listMethods, "push", 1, listPushNative);
-	defineNative(vm, &vm->listMethods, "reduce", 1, listReduceNative);
-	defineNative(vm, &vm->listMethods, "reverse", 0, listReverseNative);
-	defineNative(vm, &vm->listMethods, "sort", 1, listSortNative);
+	defineNative(vm, &vm->listMethods, "any", 0, false, listAnyNative);
+	defineNative(vm, &vm->listMethods, "clear", 0, false, listClearNative);
+	defineNative(vm, &vm->listMethods, "concat", 1, false, listConcatNative);
+	defineNative(vm, &vm->listMethods, "every", 0, false, listEveryNative);
+	defineNative(vm, &vm->listMethods, "extend", 1, false, listExtendNative);
+	defineNative(vm, &vm->listMethods, "filter", 1, false, listFilterNative);
+	defineNative(vm, &vm->listMethods, "fill", 1, false, listFillNative);
+	defineNative(vm, &vm->listMethods, "forEach", 1, false, listForEachNative);
+	defineNative(vm, &vm->listMethods, "indexOf", 1, false, listIndexOfNative);
+	defineNative(vm, &vm->listMethods, "iterator", 0, false, listIteratorNative);
+	defineNative(vm, &vm->listMethods, "lastIndexOf", 1, false, listLastIndexOfNative);
+	defineNative(vm, &vm->listMethods, "length", 0, false, listLengthNative);
+	defineNative(vm, &vm->listMethods, "map", 1, false, listMapNative);
+	defineNative(vm, &vm->listMethods, "ofLength", 1, false, listOfLengthNative);
+	defineNative(vm, &vm->listMethods, "pop", 0, false, listPopNative);
+	defineNative(vm, &vm->listMethods, "push", 1, false, listPushNative);
+	defineNative(vm, &vm->listMethods, "reduce", 1, false, listReduceNative);
+	defineNative(vm, &vm->listMethods, "reverse", 0, false, listReverseNative);
+	defineNative(vm, &vm->listMethods, "sort", 1, false, listSortNative);
 }
