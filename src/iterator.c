@@ -133,8 +133,8 @@ void defineIteratorMethods(VM* vm) {
 	tableAddAll(vm, &vm->objectClass->methods, &vm->iteratorClass->methods);
 	vm->iteratorClass->superclass = vm->objectClass;
 
-	defineNative(vm, &vm->iteratorClass->methods, "constructor", 1, iteratorConstructorNative);
-	defineNative(vm, &vm->iteratorClass->methods, "iterator", 0, iteratorIteratorNative);
-	defineNative(vm, &vm->iteratorClass->methods, "next", 0, iteratorNextNative);
-	defineNative(vm, &vm->iteratorClass->methods, "more", 0, iteratorMoreNative);
+	defineNative(vm, &vm->iteratorClass->methods, "constructor", 1, false, iteratorConstructorNative);
+	defineNative(vm, &vm->iteratorClass->methods, "iterator", 0, false, iteratorIteratorNative);
+	defineNative(vm, &vm->iteratorClass->methods, "next", 0, false, iteratorNextNative);
+	defineNative(vm, &vm->iteratorClass->methods, "more", 0, false, iteratorMoreNative);
 }

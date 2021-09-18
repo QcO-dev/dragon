@@ -471,14 +471,20 @@ static void function(Compiler* compiler, FunctionType type) {
 	beginScope(&functionCompiler);
 
 	consume(&functionCompiler, TOKEN_LEFT_PAREN, "Expected '(' after function name.");
+
+	bool varargs = false;
+
 	if (!check(&functionCompiler, TOKEN_RIGHT_PAREN)) {
 		do {
+			if (varargs) error(compiler->parser, "Variadic parameter must be the last parameter in function definition.");
 			functionCompiler.function->arity++;
 			if (functionCompiler.function->arity > 255) {
 				error(compiler->parser, "Functions may not exceed 255 parameters.");
 			}
 			uint32_t constant = parseVariable(&functionCompiler, "Expected parameter name");
 			defineVariable(&functionCompiler, constant);
+
+			if (match(&functionCompiler, TOKEN_ELLIPSIS)) varargs = true;
 		} while (match(&functionCompiler, TOKEN_COMMA));
 	}
 	consume(&functionCompiler, TOKEN_RIGHT_PAREN, "Expected ')' after function parameters.");
@@ -487,6 +493,7 @@ static void function(Compiler* compiler, FunctionType type) {
 
 	functionCompiler.vm = compiler->vm;
 	ObjFunction* function = endCompiler(&functionCompiler);
+	function->varargs = varargs;
 	emitByte(compiler, OP_CLOSURE);
 	encodeConstant(compiler, makeConstant(compiler, OBJ_VAL(function)));
 
@@ -725,7 +732,7 @@ static void startLambda(Compiler* compiler, Compiler* functionCompiler) {
 	functionCompiler->function->isLambda = true;
 }
 
-static void endLambda(Compiler* compiler, Compiler* functionCompiler) {
+static void endLambda(Compiler* compiler, Compiler* functionCompiler, bool varargs) {
 	if (match(compiler, TOKEN_LEFT_BRACE)) {
 		block(functionCompiler);
 	}
@@ -736,6 +743,7 @@ static void endLambda(Compiler* compiler, Compiler* functionCompiler) {
 
 	functionCompiler->vm = compiler->vm;
 	ObjFunction* function = endCompiler(functionCompiler);
+	function->varargs = varargs;
 	emitByte(compiler, OP_CLOSURE);
 	encodeConstant(compiler, makeConstant(compiler, OBJ_VAL(function)));
 
@@ -751,26 +759,29 @@ static void lambda(Compiler* compiler, bool canAssign) {
 	Compiler functionCompiler;
 	startLambda(compiler, &functionCompiler);
 
+	bool varargs = false;
 	if (!check(compiler, TOKEN_BIT_OR)) {
 		do {
+			if (varargs) error(compiler->parser, "Variadic parameter must be the last parameter in function definition.");
 			functionCompiler.function->arity++;
 			if (functionCompiler.function->arity > 255) {
 				error(compiler->parser, "Functions may not exceed 255 parameters.");
 			}
 			uint32_t constant = parseVariable(&functionCompiler, "Expected parameter name");
 			defineVariable(&functionCompiler, constant);
+			if (match(&functionCompiler, TOKEN_ELLIPSIS)) varargs = true;
 		} while (match(compiler, TOKEN_COMMA));
 	}
 
 	consume(compiler, TOKEN_BIT_OR, "Expected '|' after parameters.");
 
-	endLambda(compiler, &functionCompiler);
+	endLambda(compiler, &functionCompiler, varargs);
 }
 
 static void lambdaEmpty(Compiler* compiler, bool canAssign) {
 	Compiler functionCompiler;
 	startLambda(compiler, &functionCompiler);
-	endLambda(compiler, &functionCompiler);
+	endLambda(compiler, &functionCompiler, false);
 }
 
 static uint8_t argumentList(Compiler* compiler) {
@@ -1504,6 +1515,7 @@ ParseRule rules[] = {
   [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
   [TOKEN_DOT] = {NULL, dot, PREC_CALL},
   [TOKEN_D_ELLIPSIS] = {NULL, binary, PREC_RANGE},
+  [TOKEN_ELLIPSIS] = {NULL, NULL, PREC_NONE},
   [TOKEN_MINUS] = {unary,  binary, PREC_TERM},
   [TOKEN_PLUS] = {NULL, binary, PREC_TERM},
   [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},

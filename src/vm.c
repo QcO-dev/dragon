@@ -277,22 +277,55 @@ static void closeUpvalues(VM* vm, Value* last) {
 
 static bool call(VM* vm, ObjClosure* closure, uint8_t argCount, uint8_t* argsUsed) {
 	size_t expected = closure->function->arity;
-	if(argCount != expected) {
-		if (!closure->function->isLambda) {
-			return throwException(vm, "ArityException","Expected %u arguments but got %u.", closure->function->arity, argCount);
-		}
-		if (argCount > expected) {
-			for (size_t i = argCount; i > closure->function->arity; i--) {
+
+	if (closure->function->varargs) {
+		size_t required = expected - 1; // Less varargs
+		if (argCount < required) {
+			if (closure->function->isLambda) {
+				for (size_t i = argCount; i < required; i++) {
+					push(vm, NULL_VAL);
+				}
+			}
+			else {
 				pop(vm);
+				return throwException(vm, "ArityException", "Expected %zu or more arguments but got %zu", required, argCount);
 			}
 		}
-		else {
-			for (size_t i = argCount; i < closure->function->arity; i++) {
-				push(vm, NULL_VAL);
-			}
+
+		size_t varargCount = argCount - required;
+
+		ValueArray array;
+		initValueArray(&array);
+
+		for (size_t i = varargCount; i > required; i--) {
+			writeValueArray(vm, &array, peek(vm, i - 1));
 		}
+		popN(vm, varargCount - required);
+
+		ObjList* list = newList(vm, array);
+
+		push(vm, OBJ_VAL(list));
+
+		*argsUsed = expected + varargCount - 1;
 	}
-	*argsUsed = expected;
+	else {
+		if (argCount != expected) {
+			if (!closure->function->isLambda) {
+				return throwException(vm, "ArityException", "Expected %u arguments but got %u.", closure->function->arity, argCount);
+			}
+			if (argCount > expected) {
+				for (size_t i = argCount; i > closure->function->arity; i--) {
+					pop(vm);
+				}
+			}
+			else {
+				for (size_t i = argCount; i < closure->function->arity; i++) {
+					push(vm, NULL_VAL);
+				}
+			}
+		}
+		*argsUsed = expected;
+	}
 
 	if (vm->frameCount == FRAMES_MAX) {
 		return throwException(vm, "StackOverflowException", "Stack overflow (Max frame: %d).", FRAMES_MAX);
@@ -354,8 +387,10 @@ bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed) {
 				ObjNative* native = AS_NATIVE(callee);
 
 				if (argCount != native->arity) {
-					pop(vm);
-					return throwException(vm, "ArityException", "Expected %zu argument(s) but got %u.", native->arity, argCount);
+					if (!(native->varargs && argCount > native->arity)) {
+						pop(vm);
+						return throwException(vm, "ArityException", "Expected %zu argument(s) but got %u.", native->arity, argCount);
+					}
 				}
 
 				NativeFn nativeFunction = native->function;
@@ -904,6 +939,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				writeValueArray(vm, &array, appendee);
 
 				ObjList* nList = newList(vm, array);
+				popN(vm, 2);
 				push(vm, OBJ_VAL(nList));
 			}
 			else if (IS_STRING(peek(vm, 0)) || IS_STRING(peek(vm, 1))) {

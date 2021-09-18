@@ -4,5 +4,5 @@
 #include "vm.h"
 
 Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, bool* hasError);
-void defineNative(VM* vm, Table* table, const char* name, size_t arity, NativeFn function);
+void defineNative(VM* vm, Table* table, const char* name, size_t arity, bool varargs, NativeFn function);
 void defineGlobalNatives(VM* vm);

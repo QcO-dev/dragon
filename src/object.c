@@ -60,6 +60,7 @@ ObjFunction* newFunction(VM* vm) {
 	function->upvalueCount = 0;
 	function->name = NULL;
 	function->isLambda = false;
+	function->varargs = false;
 	initChunk(&function->chunk);
 	return function;
 }
@@ -466,9 +467,9 @@ static Value toStringNative(VM* vm, Value* bound, uint8_t argCount, Value* args,
 }
 
 void defineObjectNatives(VM* vm) {
-	defineNative(vm, &vm->objectClass->methods, "keys", 0, keysNative);
-	defineNative(vm, &vm->objectClass->methods, "values", 0, valuesNative);
-	defineNative(vm, &vm->objectClass->methods, "entries", 0, entriesNative);
-	defineNative(vm, &vm->objectClass->methods, "hasProperty", 1, hasPropertyNative);
-	defineNative(vm, &vm->objectClass->methods, "toString", 0, toStringNative);
+	defineNative(vm, &vm->objectClass->methods, "keys", 0, false, keysNative);
+	defineNative(vm, &vm->objectClass->methods, "values", 0, false, valuesNative);
+	defineNative(vm, &vm->objectClass->methods, "entries", 0, false, entriesNative);
+	defineNative(vm, &vm->objectClass->methods, "hasProperty", 1, false, hasPropertyNative);
+	defineNative(vm, &vm->objectClass->methods, "toString", 0, false, toStringNative);
 }
