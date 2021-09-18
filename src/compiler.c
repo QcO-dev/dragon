@@ -807,6 +807,19 @@ static void dot(Compiler* compiler, bool canAssign) {
 		emitByte(compiler, OP_SET_PROPERTY);
 		encodeConstant(compiler, name);
 	}
+	else if (canAssign && isInplaceOperator(compiler)) {
+		TokenType op = compiler->parser->previous.type;
+
+		emitByte(compiler, OP_DUP);
+		emitByte(compiler, OP_GET_PROPERTY);
+		encodeConstant(compiler, name);
+
+		expression(compiler);
+		inplaceOperator(compiler, op);
+
+		emitByte(compiler, OP_SET_PROPERTY);
+		encodeConstant(compiler, name);
+	}
 	else if (match(compiler, TOKEN_LEFT_PAREN)) {
 		uint8_t argCount = argumentList(compiler);
 		emitByte(compiler, OP_INVOKE);
