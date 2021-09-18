@@ -953,6 +953,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, NUMBER_VAL(a + b));
 			}
 			else {
+				pop(vm);
+				pop(vm);
 				if (!throwException(vm, "TypeException", "Operands are invalid for '+' operation.")) return INTERPRETER_RUNTIME_ERR;
 				break;
 			}

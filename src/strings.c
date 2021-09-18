@@ -4,6 +4,7 @@
 #include "iterator.h"
 #include <string.h>
 #include <math.h>
+#include <stdlib.h>
 
 /*
   Utility for string methods
@@ -124,6 +125,20 @@ static Value stringLengthNative(VM* vm, Value* bound, uint8_t argCount, Value* a
 	return NUMBER_VAL((double)AS_STRING(*bound)->length);
 }
 
+static Value stringParseNumberNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+	char* str = AS_CSTRING(*bound);
+	char* end;
+
+	double result = strtod(str, &end);
+
+	if (end == str || *end != '\0') {
+		*hasError = throwException(vm, "TypeException", "String does not represent a valid number.");
+		return (*hasError) ? NULL_VAL : pop(vm);
+	}
+
+	return NUMBER_VAL(result);
+}
+
 static Value stringRepeatNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	ObjString* string = AS_STRING(*bound);
 
@@ -220,6 +235,7 @@ void defineStringMethods(VM* vm) {
 	defineNative(vm, &vm->stringMethods, "iterator", 0, false, stringIteratorNative);
 	defineNative(vm, &vm->stringMethods, "lastIndexOf", 1, false, stringLastIndexOfNative);
 	defineNative(vm, &vm->stringMethods, "length", 0, false, stringLengthNative);
+	defineNative(vm, &vm->stringMethods, "parseNumber", 0, false, stringParseNumberNative);
 	defineNative(vm, &vm->stringMethods, "repeat", 1, false, stringRepeatNative);
 	defineNative(vm, &vm->stringMethods, "startsWith", 1, false, stringStartsWithNative);
 	defineNative(vm, &vm->stringMethods, "substring", 2, false, stringSubstringNative);
