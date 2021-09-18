@@ -4,7 +4,34 @@
 #include <time.h>
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
 
+/*
+ Helper Functions
+*/
+
+char* inputString(FILE* fp, size_t size) {
+	char* str;
+	int ch;
+	size_t len = 0;
+	str = realloc(NULL, sizeof(*str) * size);//size is start size
+	if (!str)return str;
+	while (EOF != (ch = fgetc(fp)) && ch != '\n') {
+		str[len++] = ch;
+		if (len == size) {
+			str = realloc(str, sizeof(*str) * (size += 16));
+			if (!str)return str;
+		}
+	}
+	str[len++] = '\0';
+
+	return realloc(str, sizeof(*str) * len);
+}
+
+
+/*
+ Native Functions
+*/
 static Value clockNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
 	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
@@ -18,6 +45,17 @@ static Value printNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bo
 	}
 	printf("\n");
 	return NULL_VAL;
+}
+
+static Value inputNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+	for (size_t i = 0; i < argCount; i++) {
+		ObjString* value = valueToString(vm, args[i], hasError);
+		if (*hasError) return NULL_VAL;
+		printf("%s", value->chars);
+		if(i != argCount - 1) printf(" ");
+	}
+	char* input = inputString(stdin, 128);
+	return OBJ_VAL(takeString(vm, input, strlen(input)));
 }
 
 static Value toStringNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
@@ -42,6 +80,7 @@ void defineGlobalNatives(VM* vm) {
 	defineNative(vm, &vm->globals, "clock", 0, false, clockNative);
 	defineNative(vm, &vm->globals, "sqrt", 1, false, sqrtNative);
 	defineNative(vm, &vm->globals, "print", 0, true, printNative);
+	defineNative(vm, &vm->globals, "input", 0, true, inputNative);
 }
 
 /*
@@ -85,7 +124,7 @@ Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, 
 
 void defineNative(VM* vm, Table* table, const char* name, size_t arity, bool varargs, NativeFn function) {
 	push(vm, OBJ_VAL(copyString(vm, name, strlen(name))));
-	push(vm, OBJ_VAL(newNative(vm, arity, function, varargs)));
+	push(vm, OBJ_VAL(newNative(vm, arity, varargs, function)));
 	tableSet(vm, table, AS_STRING(vm->stack[0]), vm->stack[1]);
 	pop(vm);
 	pop(vm);
