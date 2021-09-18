@@ -4,6 +4,7 @@
 #include "iterator.h"
 #include <string.h>
 #include <math.h>
+#include <stdlib.h>
 
 /*
   Utility for string methods
@@ -44,12 +45,12 @@ intmax_t findLast(const char* str, const char* word) {
   String Methods
 */
 
-static Value stringConcatNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value stringConcatNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjString* string = AS_STRING(*bound);
 
 	Value concatee = args[0];
 
-	ObjString* stringForm = valueToString(vm, concatee, hasError);
+	ObjString* stringForm = valueToString(vm, concatee, hasError, exception);
 	if (*hasError) return NULL_VAL;
 
 	char* dest = ALLOCATE(vm, char, string->length + stringForm->length + 1);
@@ -59,12 +60,12 @@ static Value stringConcatNative(VM* vm, Value* bound, uint8_t argCount, Value* a
 	return OBJ_VAL(takeString(vm, dest, string->length + stringForm->length));
 }
 
-static Value stringEndsWithNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value stringEndsWithNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjString* string = AS_STRING(*bound);
 
 	Value testV = args[0];
 
-	ObjString* test = valueToString(vm, testV, hasError);
+	ObjString* test = valueToString(vm, testV, hasError, exception);
 	if (*hasError) return NULL_VAL;
 
 	if (test->length > string->length) {
@@ -74,12 +75,12 @@ static Value stringEndsWithNative(VM* vm, Value* bound, uint8_t argCount, Value*
 	return BOOL_VAL(memcmp(string->chars + (string->length - test->length), test->chars, test->length) == 0);
 }
 
-static Value stringIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value stringIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjString* string = AS_STRING(*bound);
 
 	Value testV = args[0];
 
-	ObjString* test = valueToString(vm, testV, hasError);
+	ObjString* test = valueToString(vm, testV, hasError, exception);
 	if (*hasError) return NULL_VAL;
 
 	if (test->length > string->length) {
@@ -95,22 +96,22 @@ static Value stringIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* 
 	return NUMBER_VAL((double)index);
 }
 
-static Value stringIteratorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value stringIteratorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	Value iterator = OBJ_VAL(newInstance(vm, vm->iteratorClass));
 
 	push(vm, *bound);
-	iteratorConstructorNative(vm, &iterator, 1, bound, hasError);
+	iteratorConstructorNative(vm, &iterator, 1, bound, hasError, exception);
 	if (*hasError) return NULL_VAL;
 
 	return iterator;
 }
 
-static Value stringLastIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value stringLastIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjString* string = AS_STRING(*bound);
 
 	Value testV = args[0];
 
-	ObjString* test = valueToString(vm, testV, hasError);
+	ObjString* test = valueToString(vm, testV, hasError, exception);
 	if (*hasError) return NULL_VAL;
 
 	if (test->length > string->length) {
@@ -120,21 +121,38 @@ static Value stringLastIndexOfNative(VM* vm, Value* bound, uint8_t argCount, Val
 	return NUMBER_VAL((double)findLast(string->chars, test->chars));
 }
 
-static Value stringLengthNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value stringLengthNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	return NUMBER_VAL((double)AS_STRING(*bound)->length);
 }
 
-static Value stringRepeatNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value stringParseNumberNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
+	char* str = AS_CSTRING(*bound);
+	char* end;
+
+	double result = strtod(str, &end);
+
+	if (end == str || *end != '\0') {
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "String does not represent a valid number.");
+		return NULL_VAL;
+	}
+
+	return NUMBER_VAL(result);
+}
+
+static Value stringRepeatNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjString* string = AS_STRING(*bound);
 
 	if (!IS_NUMBER(args[0])) {
-		*hasError = !throwException(vm, "TypeException", "Expected number as first argument in repeat.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Expected number as first argument in repeat.");
+		return NULL_VAL;
 	}
 
 	if (floor(AS_NUMBER(args[0])) != AS_NUMBER(args[0])) {
-		*hasError = !throwException(vm, "TypeException", "Expected integer as first argument in repeat.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Expected integer as first argument in repeat.");
+		return NULL_VAL;
 	}
 
 	intmax_t size = (intmax_t)AS_NUMBER(args[0]);
@@ -153,12 +171,12 @@ static Value stringRepeatNative(VM* vm, Value* bound, uint8_t argCount, Value* a
 	return OBJ_VAL(takeString(vm, dest, string->length * size));
 }
 
-static Value stringStartsWithNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value stringStartsWithNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjString* string = AS_STRING(*bound);
 
 	Value testV = args[0];
 
-	ObjString* test = valueToString(vm, testV, hasError);
+	ObjString* test = valueToString(vm, testV, hasError, exception);
 	if (*hasError) return NULL_VAL;
 
 	if (test->length > string->length) {
@@ -168,7 +186,7 @@ static Value stringStartsWithNative(VM* vm, Value* bound, uint8_t argCount, Valu
 	return BOOL_VAL(memcmp(string->chars, test->chars, test->length) == 0);
 }
 
-static Value stringSubstringNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value stringSubstringNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjString* string = AS_STRING(*bound);
 
 	Value startV = args[0];
@@ -180,13 +198,15 @@ static Value stringSubstringNative(VM* vm, Value* bound, uint8_t argCount, Value
 	}
 	
 	if (!IS_NUMBER(endV)) {
-		*hasError = throwException(vm, "TypeException", "Index must be a number.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Index must be a number.");
+		return NULL_VAL;
 	}
 	double indexNum = AS_NUMBER(endV);
 	if (floor(indexNum) != indexNum) {
-		*hasError = !throwException(vm, "TypeException", "Index must be an integer.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Index must be an integer.");
+		return NULL_VAL;
 	}
 	intmax_t indexSigned = (intmax_t)indexNum;
 	uintmax_t end = indexSigned;
@@ -196,13 +216,15 @@ static Value stringSubstringNative(VM* vm, Value* bound, uint8_t argCount, Value
 	}
 
 	if (end > string->length) {
-		*hasError = !throwException(vm, "IndexException", "Index %d is out of bounds for length %d.", indexSigned, string->length);
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "IndexException", "Index %d is out of bounds for length %d.", indexSigned, string->length);
+		return NULL_VAL;
 	}
 
 	if (end < start) {
-		*hasError = !throwException(vm, "IndexException", "End index cannot be less than start index.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "IndexException", "End index cannot be less than start index.");
+		return NULL_VAL;
 	}
 
 	char* dest = ALLOCATE(vm, char, end - start + 1);
@@ -220,6 +242,7 @@ void defineStringMethods(VM* vm) {
 	defineNative(vm, &vm->stringMethods, "iterator", 0, false, stringIteratorNative);
 	defineNative(vm, &vm->stringMethods, "lastIndexOf", 1, false, stringLastIndexOfNative);
 	defineNative(vm, &vm->stringMethods, "length", 0, false, stringLengthNative);
+	defineNative(vm, &vm->stringMethods, "parseNumber", 0, false, stringParseNumberNative);
 	defineNative(vm, &vm->stringMethods, "repeat", 1, false, stringRepeatNative);
 	defineNative(vm, &vm->stringMethods, "startsWith", 1, false, stringStartsWithNative);
 	defineNative(vm, &vm->stringMethods, "substring", 2, false, stringSubstringNative);

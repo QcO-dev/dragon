@@ -2,7 +2,7 @@
 #include "natives.h"
 #include <math.h>
 
-Value iteratorConstructorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+Value iteratorConstructorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjInstance* instance = AS_INSTANCE(*bound);
 
 	tableSet(vm, &instance->fields, vm->stringConstants[STR_INDEX], NUMBER_VAL(0));
@@ -11,33 +11,37 @@ Value iteratorConstructorNative(VM* vm, Value* bound, uint8_t argCount, Value* a
 	return OBJ_VAL(instance);
 }
 
-static Value iteratorIteratorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value iteratorIteratorNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	return *bound;
 }
 
-static Value iteratorNextNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value iteratorNextNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjInstance* instance = AS_INSTANCE(*bound);
 
 	Value data;
 	if (!tableGet(&instance->fields, vm->stringConstants[STR_DATA], &data)) {
-		*hasError = !throwException(vm, "PropertyException", "Iterator object must have a 'data' field.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "PropertyException", "Iterator object must have a 'data' field.");
+		return NULL_VAL;
 	}
 
 	Value indexVal;
 	if (!tableGet(&instance->fields, vm->stringConstants[STR_INDEX], &indexVal)) {
-		*hasError = !throwException(vm, "PropertyException", "Iterator object must have a 'index' field.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "PropertyException", "Iterator object must have a 'index' field.");
+		return NULL_VAL;
 	}
 
 	if (!IS_NUMBER(indexVal)) {
-		*hasError = !throwException(vm, "TypeException", "Iterator object's 'index' must be a number.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Iterator object's 'index' must be a number.");
+		return NULL_VAL;
 	}
 	double indexNum = AS_NUMBER(indexVal);
 	if (floor(indexNum) != indexNum) {
-		*hasError = !throwException(vm, "TypeException", "Iterator object's 'index' must be an integer.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Iterator object's 'index' must be an integer.");
+		return NULL_VAL;
 	}
 	intmax_t indexSigned = (intmax_t)indexNum;
 	uintmax_t index = indexSigned;
@@ -72,8 +76,9 @@ static Value iteratorNextNative(VM* vm, Value* bound, uint8_t argCount, Value* a
 		}
 	}
 	else {
-		*hasError = !throwException(vm, "TypeException", "Iterator object's 'data' must be a string or a list.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Iterator object's 'data' must be a string or a list.");
+		return NULL_VAL;
 	}
 
 	tableSet(vm, &instance->fields, vm->stringConstants[STR_INDEX], NUMBER_VAL(index + 1));
@@ -81,29 +86,33 @@ static Value iteratorNextNative(VM* vm, Value* bound, uint8_t argCount, Value* a
 	return returnValue;
 }
 
-static Value iteratorMoreNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError) {
+static Value iteratorMoreNative(VM* vm, Value* bound, uint8_t argCount, Value* args, bool* hasError, ObjInstance** exception) {
 	ObjInstance* instance = AS_INSTANCE(*bound);
 
 	Value data;
 	if (!tableGet(&instance->fields, vm->stringConstants[STR_DATA], &data)) {
-		*hasError = !throwException(vm, "PropertyException", "Iterator object must have a 'data' field.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "PropertyException", "Iterator object must have a 'data' field.");
+		return NULL_VAL;
 	}
 
 	Value indexVal;
 	if (!tableGet(&instance->fields, vm->stringConstants[STR_INDEX], &indexVal)) {
-		*hasError = !throwException(vm, "PropertyException", "Iterator object must have a 'index' field.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "PropertyException", "Iterator object must have a 'index' field.");
+		return NULL_VAL;
 	}
 
 	if (!IS_NUMBER(indexVal)) {
-		*hasError = !throwException(vm, "TypeException", "Iterator object's 'index' must be a number.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Iterator object's 'index' must be a number.");
+		return NULL_VAL;
 	}
 	double indexNum = AS_NUMBER(indexVal);
 	if (floor(indexNum) != indexNum) {
-		*hasError = !throwException(vm, "TypeException", "Iterator object's 'index' must be an integer.");
-		return (*hasError) ? NULL_VAL : pop(vm);
+		*hasError = true;
+		*exception = makeException(vm, "TypeException", "Iterator object's 'index' must be an integer.");
+		return NULL_VAL;
 	}
 	intmax_t indexSigned = (intmax_t)indexNum;
 	uintmax_t index = indexSigned;
@@ -125,8 +134,9 @@ static Value iteratorMoreNative(VM* vm, Value* bound, uint8_t argCount, Value* a
 		return BOOL_VAL(index < length);
 	}
 
-	*hasError = !throwException(vm, "TypeException", "Iterator object's 'data' must be a string or a list.");
-	return (*hasError) ? NULL_VAL : pop(vm);
+	*hasError = true;
+	*exception = makeException(vm, "TypeException", "Iterator object's 'data' must be a string or a list.");
+	return NULL_VAL;
 }
 
 void defineIteratorMethods(VM* vm) {

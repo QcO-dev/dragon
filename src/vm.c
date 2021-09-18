@@ -144,7 +144,7 @@ static bool throwGeneral(VM* vm, ObjInstance* throwee) {
 	}
 
 	bool hasError = false;
-	ObjString* fullMessage = makeStringf(vm, "%s: %s", throwee->klass->name->chars, valueToString(vm, message, &hasError)->chars);
+	ObjString* fullMessage = makeStringf(vm, "%s: %s", throwee->klass->name->chars, valueToString(vm, message, &hasError, &throwee)->chars);
 	if (hasError) return false;
 
 	writeValueArray(vm, &stackTrace, OBJ_VAL(fullMessage));
@@ -211,6 +211,34 @@ static bool throwGeneral(VM* vm, ObjInstance* throwee) {
 	frame->ip = frame->catchJump;
 
 	return true;
+}
+
+ObjInstance* makeException(VM* vm, const char* name, const char* format, ...) {
+	va_list args;
+	va_start(args, format);
+	ObjString* message = makeStringvf(vm, format, args);
+	va_end(args);
+	push(vm, OBJ_VAL(message));
+
+	ObjString* nameStr = copyString(vm, name, strlen(name));
+
+	Value value;
+	if (!tableGet(&vm->globals, nameStr, &value)) {
+		fprintf(stderr, "Expected '%s' to be available at global scope.", name);
+		return false;
+	}
+	if (!IS_CLASS(value)) {
+		fprintf(stderr, "Expected '%s' to be a class.", name);
+		return false;
+	}
+
+	ObjInstance* instance = newInstance(vm, AS_CLASS(value));
+	push(vm, OBJ_VAL(instance));
+	tableSet(vm, &instance->fields, vm->stringConstants[STR_MESSAGE], OBJ_VAL(message));
+
+	popN(vm, 2);
+	push(vm, OBJ_VAL(instance));
+	return instance;
 }
 
 bool throwException(VM* vm, const char* name, const char* format, ...) {
@@ -395,9 +423,15 @@ bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed) {
 
 				NativeFn nativeFunction = native->function;
 				bool hasError = false;
+				ObjInstance* exception = NULL;
 
-				Value result = nativeFunction(vm, native->isBound ? &native->bound : NULL, argCount, vm->stackTop - argCount, &hasError);
+				Value result = nativeFunction(vm, native->isBound ? &native->bound : NULL, argCount, vm->stackTop - argCount, &hasError, &exception);
 				vm->stackTop -= ((size_t)argCount) + 1;
+				if (hasError) {
+					pop(vm);
+					push(vm, OBJ_VAL(exception));
+					return throwGeneral(vm, exception);
+				}
 				push(vm, result);
 				return !hasError;
 			}
@@ -493,7 +527,7 @@ static bool invoke(VM* vm, ObjString* name, uint8_t argCount) {
 	return invokeFromClass(vm, instance, instance->klass, name, argCount);
 }
 
-static bool concatenate(VM* vm) {
+static bool concatenate(VM* vm, ObjInstance** exception) {
 	ObjString* b;
 	ObjString* a;
 	bool hasError = false;
@@ -504,12 +538,12 @@ static bool concatenate(VM* vm) {
 		push(vm, valB);
 		push(vm, valA);
 
-		b = valueToString(vm, peek(vm, 1), &hasError);
-		a = valueToString(vm, peek(vm, 0), &hasError);
+		b = valueToString(vm, peek(vm, 1), &hasError, exception);
+		a = valueToString(vm, peek(vm, 0), &hasError, exception);
 	}
 	else {
-		b = valueToString(vm, peek(vm, 0), &hasError);
-		a = valueToString(vm, peek(vm, 1), &hasError);
+		b = valueToString(vm, peek(vm, 0), &hasError, exception);
+		a = valueToString(vm, peek(vm, 1), &hasError, exception);
 	}
 	
 	if (hasError) { 
@@ -943,8 +977,10 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, OBJ_VAL(nList));
 			}
 			else if (IS_STRING(peek(vm, 0)) || IS_STRING(peek(vm, 1))) {
-				if (!concatenate(vm)) {
-					return INTERPRETER_RUNTIME_ERR;
+				ObjInstance* exception = NULL;
+				if (!concatenate(vm, &exception)) {
+					if (!throwGeneral(vm, exception)) return INTERPRETER_RUNTIME_ERR;
+					break;
 				}
 			}
 			else if (IS_NUMBER(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
@@ -953,6 +989,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				push(vm, NUMBER_VAL(a + b));
 			}
 			else {
+				pop(vm);
+				pop(vm);
 				if (!throwException(vm, "TypeException", "Operands are invalid for '+' operation.")) return INTERPRETER_RUNTIME_ERR;
 				break;
 			}
