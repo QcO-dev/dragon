@@ -808,12 +808,12 @@ static void binary(Compiler* compiler, bool canAssign) {
 		case TOKEN_LEFT_SHIFT: emitByte(compiler, OP_LSH); break;
 		case TOKEN_RIGHT_SHIFT: emitByte(compiler, OP_ASH); break;
 		case TOKEN_RIGHT_SHIFT_U: emitByte(compiler, OP_RSH); break;
-		case TOKEN_BANG_EQUAL: emitPair(compiler, OP_EQUAL, OP_NOT); break;
+		case TOKEN_BANG_EQUAL: emitByte(compiler, OP_NOT_EQUAL); break;
 		case TOKEN_EQUAL_EQUAL: emitByte(compiler, OP_EQUAL); break;
 		case TOKEN_GREATER: emitByte(compiler, OP_GREATER); break;
-		case TOKEN_GREATER_EQUAL: emitPair(compiler, OP_LESS, OP_NOT); break;
+		case TOKEN_GREATER_EQUAL: emitByte(compiler, OP_GREATER_EQ); break;
 		case TOKEN_LESS: emitByte(compiler, OP_LESS); break;
-		case TOKEN_LESS_EQUAL: emitPair(compiler, OP_GREATER, OP_NOT); break;
+		case TOKEN_LESS_EQUAL: emitByte(compiler, OP_LESS_EQ); break;
 		case TOKEN_IS: emitByte(compiler, OP_IS); break;
 		case TOKEN_IN: emitByte(compiler, OP_IN); break;
 		case TOKEN_INSTANCEOF: emitByte(compiler, OP_INSTANCEOF); break;
