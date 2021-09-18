@@ -826,6 +826,13 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_POP: pop(vm); break;
 		case OP_DUP: push(vm, peek(vm, 0)); break;
+		
+		case OP_DUP_X2: {
+			// x, y -> x, y, x, y
+			push(vm, peek(vm, 1));
+			push(vm, peek(vm, 1));
+			break;
+		}
 
 		case OP_SWAP: {
 			Value a = pop(vm);
@@ -911,10 +918,10 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		}
 
 		case OP_AND: BITWISE_BINARY_OP(&); break;
-		case OP_OR: BITWISE_BINARY_OP(| ); break;
+		case OP_OR: BITWISE_BINARY_OP(|); break;
 		case OP_XOR: BITWISE_BINARY_OP(^); break;
-		case OP_LSH: BITWISE_BINARY_OP(<< ); break;
-		case OP_ASH: BITWISE_BINARY_OP(>> ); break;
+		case OP_LSH: BITWISE_BINARY_OP(<<); break;
+		case OP_ASH: BITWISE_BINARY_OP(>>); break;
 		case OP_RSH: {
 			if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {
 				if (!throwException(vm, "TypeException", "Operands must be numbers.")) return INTERPRETER_RUNTIME_ERR;
@@ -939,6 +946,13 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			break;
 		}
 
+		case OP_NOT_EQUAL: {
+			Value b = pop(vm);
+			Value a = pop(vm);
+			push(vm, BOOL_VAL(!valuesEqual(a, b)));
+			break;
+		}
+
 		case OP_IS: {
 			Value b = pop(vm);
 			Value a = pop(vm);
@@ -955,8 +969,10 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			break;
 		}
 
-		case OP_GREATER: BINARY_OP(BOOL_VAL, > ); break;
-		case OP_LESS: BINARY_OP(BOOL_VAL, < ); break;
+		case OP_GREATER: BINARY_OP(BOOL_VAL, >); break;
+		case OP_GREATER_EQ: BINARY_OP(BOOL_VAL, >=); break;
+		case OP_LESS: BINARY_OP(BOOL_VAL, <); break;
+		case OP_LESS_EQ: BINARY_OP(BOOL_VAL, <=); break;
 
 		case OP_IN: {
 			Value b = pop(vm);

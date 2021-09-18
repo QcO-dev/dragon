@@ -222,6 +222,10 @@ static Token identifier(Scanner* scanner) {
 	return makeToken(scanner, identifierType(scanner));
 }
 
+static TokenType inplace(Scanner* scanner, TokenType type, TokenType inplaceType) {
+	return match(scanner, '=') ? inplaceType : type;
+}
+
 Token scanToken(Scanner* scanner) {
 	skipWhitespace(scanner);
 	scanner->start = scanner->current;
@@ -243,15 +247,15 @@ Token scanToken(Scanner* scanner) {
 		case ';': return makeToken(scanner, TOKEN_SEMICOLON);
 		case ',': return makeToken(scanner, TOKEN_COMMA);
 		case '.': return makeToken(scanner, TOKEN_DOT);
-		case '+': return makeToken(scanner, TOKEN_PLUS);
-		case '/': return makeToken(scanner, TOKEN_SLASH);
-		case '*': return makeToken(scanner, TOKEN_STAR);
-		case '%': return makeToken(scanner, TOKEN_PERCENT);
-		case '^': return makeToken(scanner, TOKEN_XOR);
+		case '+': return makeToken(scanner, inplace(scanner, TOKEN_PLUS, TOKEN_PLUS_IN));
+		case '/': return makeToken(scanner, inplace(scanner, TOKEN_SLASH, TOKEN_SLASH_IN));
+		case '*': return makeToken(scanner, inplace(scanner, TOKEN_STAR, TOKEN_STAR_IN));
+		case '%': return makeToken(scanner, inplace(scanner, TOKEN_PERCENT, TOKEN_PERCENT_IN));
+		case '^': return makeToken(scanner, inplace(scanner, TOKEN_XOR, TOKEN_XOR_IN));
 		case '~': return makeToken(scanner, TOKEN_BIT_NOT);
 		case ':': return makeToken(scanner, TOKEN_COLON);
 		case '?': return makeToken(scanner, TOKEN_QUESTION);
-		case '-': return makeToken(scanner, match(scanner, '>') ? TOKEN_ARROW : TOKEN_MINUS);
+		case '-': return makeToken(scanner, match(scanner, '>') ? TOKEN_ARROW : inplace(scanner, TOKEN_MINUS, TOKEN_MINUS_IN));
 		case '!': return makeToken(scanner, match(scanner, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
 		case '=': return makeToken(scanner, match(scanner, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
 		case '<': {
@@ -260,7 +264,7 @@ Token scanToken(Scanner* scanner) {
 				type = TOKEN_LESS_EQUAL;
 			}
 			else if (match(scanner, '<')) {
-				type = TOKEN_LEFT_SHIFT;
+				type = inplace(scanner, TOKEN_LEFT_SHIFT, TOKEN_LEFT_SHIFT_IN);
 			}
 			return makeToken(scanner, type);
 		}
@@ -273,12 +277,15 @@ Token scanToken(Scanner* scanner) {
 				type = TOKEN_RIGHT_SHIFT;
 
 				if (match(scanner, '>')) {
-					type = TOKEN_RIGHT_SHIFT_U;
+					type = inplace(scanner, TOKEN_RIGHT_SHIFT_U, TOKEN_RIGHT_SHIFT_U_IN);
+				}
+				else if (match(scanner, '=')) {
+					type = TOKEN_RIGHT_SHIFT_IN;
 				}
 			}
 			return makeToken(scanner, type);
 		}
-		case '&': return makeToken(scanner, match(scanner, '&') ? TOKEN_AND : TOKEN_BIT_AND);
+		case '&': return makeToken(scanner, match(scanner, '&') ? TOKEN_AND : inplace(scanner, TOKEN_BIT_AND, TOKEN_BIT_AND_IN));
 		case '|': {
 			TokenType type = TOKEN_BIT_OR;
 			if (match(scanner, '|')) {
@@ -286,6 +293,9 @@ Token scanToken(Scanner* scanner) {
 			}
 			else if (match(scanner, '>')) {
 				type = TOKEN_PIPE;
+			}
+			else if (match(scanner, '=')) {
+				type = TOKEN_BIT_OR_IN;
 			}
 			return makeToken(scanner, type);
 		}

@@ -398,6 +398,43 @@ static void defineVariable(Compiler* compiler, uint32_t global) {
 	encodeConstant(compiler, global);
 }
 
+static bool isInplaceOperator(Compiler* compiler) {
+	switch (compiler->parser->current.type) {
+		case TOKEN_PLUS_IN:
+		case TOKEN_MINUS_IN:
+		case TOKEN_SLASH_IN:
+		case TOKEN_STAR_IN:
+		case TOKEN_PERCENT_IN:
+		case TOKEN_XOR_IN:
+		case TOKEN_BIT_AND_IN:
+		case TOKEN_BIT_OR_IN:
+		case TOKEN_RIGHT_SHIFT_IN:
+		case TOKEN_RIGHT_SHIFT_U_IN:
+		case TOKEN_LEFT_SHIFT_IN:
+			advance(compiler);
+			return true;
+		default:
+			return false;
+	}
+}
+
+static void inplaceOperator(Compiler* compiler, TokenType op) {
+	switch (op) {
+		case TOKEN_PLUS_IN: emitByte(compiler, OP_ADD); break;
+		case TOKEN_MINUS_IN: emitByte(compiler, OP_SUB); break;
+		case TOKEN_SLASH_IN: emitByte(compiler, OP_DIV); break;
+		case TOKEN_STAR_IN: emitByte(compiler, OP_MUL); break;
+		case TOKEN_PERCENT_IN: emitByte(compiler, OP_MOD); break;
+		case TOKEN_XOR_IN: emitByte(compiler, OP_XOR); break;
+		case TOKEN_BIT_AND_IN: emitByte(compiler, OP_AND); break;
+		case TOKEN_BIT_OR_IN: emitByte(compiler, OP_OR); break;
+		case TOKEN_RIGHT_SHIFT_IN: emitByte(compiler, OP_ASH); break;
+		case TOKEN_RIGHT_SHIFT_U_IN: emitByte(compiler, OP_RSH); break;
+		case TOKEN_LEFT_SHIFT_IN: emitByte(compiler, OP_LSH); break;
+		default: return; // Unreachable
+	}
+}
+
 static void pattern(Compiler* compiler) {
 	if (match(compiler, TOKEN_IN)) {
 		expression(compiler);
@@ -560,6 +597,30 @@ static void namedVariable(Compiler* compiler, Token name, bool canAssign) {
 	if (canAssign && match(compiler, TOKEN_EQUAL)) {
 		expression(compiler);
 		if(setOp != OP_SET_GLOBAL)
+			emitPair(compiler, setOp, (uint8_t)arg);
+		else {
+			emitByte(compiler, setOp);
+			encodeConstant(compiler, arg);
+		}
+	}
+	else if (canAssign && isInplaceOperator(compiler)) {
+		TokenType op = compiler->parser->previous.type;
+
+		// Get Variable
+		if (setOp != OP_SET_GLOBAL)
+			emitPair(compiler, getOp, (uint8_t)arg);
+		else {
+			emitByte(compiler, getOp);
+			encodeConstant(compiler, arg);
+		}
+
+		expression(compiler);
+
+		// Apply Operation
+		inplaceOperator(compiler, op);
+
+		// Set variable
+		if (setOp != OP_SET_GLOBAL)
 			emitPair(compiler, setOp, (uint8_t)arg);
 		else {
 			emitByte(compiler, setOp);
@@ -746,6 +807,19 @@ static void dot(Compiler* compiler, bool canAssign) {
 		emitByte(compiler, OP_SET_PROPERTY);
 		encodeConstant(compiler, name);
 	}
+	else if (canAssign && isInplaceOperator(compiler)) {
+		TokenType op = compiler->parser->previous.type;
+
+		emitByte(compiler, OP_DUP);
+		emitByte(compiler, OP_GET_PROPERTY);
+		encodeConstant(compiler, name);
+
+		expression(compiler);
+		inplaceOperator(compiler, op);
+
+		emitByte(compiler, OP_SET_PROPERTY);
+		encodeConstant(compiler, name);
+	}
 	else if (match(compiler, TOKEN_LEFT_PAREN)) {
 		uint8_t argCount = argumentList(compiler);
 		emitByte(compiler, OP_INVOKE);
@@ -765,6 +839,17 @@ static void index(Compiler* compiler, bool canAssign) {
 
 	if (canAssign && match(compiler, TOKEN_EQUAL)) {
 		expression(compiler);
+		emitByte(compiler, OP_SET_INDEX);
+	}
+	else if (canAssign && isInplaceOperator(compiler)) {
+		TokenType op = compiler->parser->previous.type;
+
+		emitByte(compiler, OP_DUP_X2);
+		emitByte(compiler, OP_GET_INDEX);
+
+		expression(compiler);
+		inplaceOperator(compiler, op);
+
 		emitByte(compiler, OP_SET_INDEX);
 	}
 	else {
@@ -808,12 +893,12 @@ static void binary(Compiler* compiler, bool canAssign) {
 		case TOKEN_LEFT_SHIFT: emitByte(compiler, OP_LSH); break;
 		case TOKEN_RIGHT_SHIFT: emitByte(compiler, OP_ASH); break;
 		case TOKEN_RIGHT_SHIFT_U: emitByte(compiler, OP_RSH); break;
-		case TOKEN_BANG_EQUAL: emitPair(compiler, OP_EQUAL, OP_NOT); break;
+		case TOKEN_BANG_EQUAL: emitByte(compiler, OP_NOT_EQUAL); break;
 		case TOKEN_EQUAL_EQUAL: emitByte(compiler, OP_EQUAL); break;
 		case TOKEN_GREATER: emitByte(compiler, OP_GREATER); break;
-		case TOKEN_GREATER_EQUAL: emitPair(compiler, OP_LESS, OP_NOT); break;
+		case TOKEN_GREATER_EQUAL: emitByte(compiler, OP_GREATER_EQ); break;
 		case TOKEN_LESS: emitByte(compiler, OP_LESS); break;
-		case TOKEN_LESS_EQUAL: emitPair(compiler, OP_GREATER, OP_NOT); break;
+		case TOKEN_LESS_EQUAL: emitByte(compiler, OP_LESS_EQ); break;
 		case TOKEN_IS: emitByte(compiler, OP_IS); break;
 		case TOKEN_IN: emitByte(compiler, OP_IN); break;
 		case TOKEN_INSTANCEOF: emitByte(compiler, OP_INSTANCEOF); break;
@@ -926,7 +1011,7 @@ static void parsePrecedence(Compiler* compiler, Precedence precedence) {
 		infixRule(compiler, canAssign);
 	}
 
-	if (canAssign && match(compiler, TOKEN_EQUAL)) {
+	if (canAssign && (match(compiler, TOKEN_EQUAL) || isInplaceOperator(compiler))) {
 		error(compiler->parser, "Invalid assignment target.");
 	}
 }
