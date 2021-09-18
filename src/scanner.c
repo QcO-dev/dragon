@@ -246,7 +246,7 @@ Token scanToken(Scanner* scanner) {
 		case ']': return makeToken(scanner, TOKEN_RIGHT_SQBR);
 		case ';': return makeToken(scanner, TOKEN_SEMICOLON);
 		case ',': return makeToken(scanner, TOKEN_COMMA);
-		case '.': return makeToken(scanner, TOKEN_DOT);
+		case '.': return makeToken(scanner, match(scanner, '.') ? TOKEN_D_ELLIPSIS : TOKEN_DOT);
 		case '+': return makeToken(scanner, inplace(scanner, TOKEN_PLUS, TOKEN_PLUS_IN));
 		case '/': return makeToken(scanner, inplace(scanner, TOKEN_SLASH, TOKEN_SLASH_IN));
 		case '*': return makeToken(scanner, inplace(scanner, TOKEN_STAR, TOKEN_STAR_IN));

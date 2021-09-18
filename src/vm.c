@@ -608,6 +608,43 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			break;
 		}
 
+		case OP_RANGE: {
+			Value endV = pop(vm);
+			Value startV = pop(vm);
+
+			if (!IS_NUMBER(startV) || !IS_NUMBER(endV)) {
+				pop(vm);
+				pop(vm);
+				if (!throwException(vm, "TypeException", "Operands must be numbers.")) return INTERPRETER_RUNTIME_ERR;
+				break;
+			}
+			double b = AS_NUMBER(endV);
+			double a = AS_NUMBER(startV);
+			if (!isInteger(a) || !isInteger(b)) {
+				if (!throwException(vm, "TypeException", "Operands must be integers.")) return INTERPRETER_RUNTIME_ERR;
+				break;
+			}
+			intmax_t aInt = (intmax_t)a;
+			intmax_t bInt = (intmax_t)b;
+
+			ValueArray array;
+			initValueArray(&array);
+
+			if (bInt > aInt) {
+				for (intmax_t i = aInt; i <= bInt; i++) {
+					writeValueArray(vm, &array, NUMBER_VAL((double)i));
+				}
+			}
+			else {
+				for (intmax_t i = aInt; i >= bInt; i--) {
+					writeValueArray(vm, &array, NUMBER_VAL((double)i));
+				}
+			}
+
+			push(vm, OBJ_VAL(newList(vm, array)));
+			break;
+		}
+
 		case OP_GET_GLOBAL: {
 			ObjString* name = READ_STRING();
 			Value value;
