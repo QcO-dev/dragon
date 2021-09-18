@@ -60,7 +60,7 @@ struct Compiler {
 
 typedef enum {
 	PREC_NONE,
-	PREC_ASSIGNMENT,  // =
+	PREC_ASSIGNMENT,  // = (<inplace>)
 	PREC_TERNARY, // ?:
 	PREC_PIPE, // |>
 	PREC_OR,  // ||
@@ -73,6 +73,7 @@ typedef enum {
 	PREC_SHIFT, // << >> >>>
 	PREC_TERM,  // + -
 	PREC_FACTOR,  // * / %
+	PREC_RANGE, // ..
 	PREC_UNARY, // ! - ~ typeof
 	PREC_CALL,  // . () {} []
 	PREC_PRIMARY
@@ -902,6 +903,7 @@ static void binary(Compiler* compiler, bool canAssign) {
 		case TOKEN_IS: emitByte(compiler, OP_IS); break;
 		case TOKEN_IN: emitByte(compiler, OP_IN); break;
 		case TOKEN_INSTANCEOF: emitByte(compiler, OP_INSTANCEOF); break;
+		case TOKEN_D_ELLIPSIS: emitByte(compiler, OP_RANGE); break;
 	}
 }
 
@@ -1501,6 +1503,7 @@ ParseRule rules[] = {
   [TOKEN_RIGHT_SQBR] = {NULL, NULL, PREC_NONE},
   [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
   [TOKEN_DOT] = {NULL, dot, PREC_CALL},
+  [TOKEN_D_ELLIPSIS] = {NULL, binary, PREC_RANGE},
   [TOKEN_MINUS] = {unary,  binary, PREC_TERM},
   [TOKEN_PLUS] = {NULL, binary, PREC_TERM},
   [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
