@@ -16,6 +16,7 @@ typedef struct {
 } CallFrame;
 
 struct VM {
+	Module* modules;
 	CallFrame* frames;
 	size_t frameCount;
 	size_t frameSize;

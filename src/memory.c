@@ -85,8 +85,13 @@ static void markRoots(VM* vm) {
 		markObject(vm, (Obj*)upvalue);
 	}
 
-	//TODO ALL MODULES
-	markTable(vm, &vm->frames[vm->frameCount - 1].closure->owner->globals);
+	Module* mod = vm->modules;
+
+	while (mod != NULL) {
+		markTable(vm, &mod->globals);
+		mod = mod->next;
+	}
+
 	markTable(vm, &vm->listMethods);
 	markTable(vm, &vm->stringMethods);
 	

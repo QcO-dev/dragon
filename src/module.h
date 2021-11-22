@@ -4,6 +4,7 @@
 
 typedef struct Module {
 	Table globals;
+	struct Module* next;
 } Module;
 
 void initModule(VM* vm, Module* mod);

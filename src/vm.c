@@ -91,12 +91,20 @@ void initVM(VM* vm) {
 }
 
 void freeVM(VM* vm) {
+	Module* mod = vm->modules;
+
+	while (mod != NULL) {
+		freeTable(vm, &mod->globals);
+		Module* next = mod->next;
+		FREE(vm, Module, mod);
+		mod = next;
+	}
+
 	freeTable(vm, &vm->strings);
 	freeTable(vm, &vm->listMethods);
 	freeTable(vm, &vm->stringMethods);
 	FREE_ARRAY(vm, ObjString*, vm->stringConstants, STR_CONSTANT_COUNT);
 	vm->stringConstants = NULL;
-	vm->shouldGC = false;
 	FREE_ARRAY(vm, CallFrame, vm->frames, vm->frameSize);
 	FREE_ARRAY(vm, Value, vm->stack, vm->stackSize);
 	freeObjects(vm);
@@ -1382,13 +1390,14 @@ InterpreterResult interpret(VM* vm, const char* source) {
 
 	vm->compiler = NULL;
 
-	//TODO CLEAN
-	Module mainModule;
-	initModule(vm, &mainModule);
+	Module* mainModule = reallocate(vm, NULL, 0, sizeof(Module));
+	initModule(vm, mainModule);
+
+	vm->modules = mainModule;
 
 	uint8_t _;
 	push(vm, OBJ_VAL(function));
-	ObjClosure* closure = newClosure(vm, &mainModule, function);
+	ObjClosure* closure = newClosure(vm, mainModule, function);
 	pop(vm);
 	push(vm, OBJ_VAL(closure));
 	call(vm, closure, 0, &_);
