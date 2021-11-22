@@ -3,6 +3,7 @@
 #include "value.h"
 #include "table.h"
 #include "compiler.h"
+#include "module.h"
 
 #define FRAMES_MAX 1024
 
@@ -21,7 +22,6 @@ struct VM {
 	Value* stack;
 	size_t stackSize;
 	Value* stackTop;
-	Table globals;
 	Table strings;
 	Table listMethods;
 	Table stringMethods;

@@ -75,13 +75,13 @@ static Value sqrtNative(VM* vm, Value* bound, uint8_t argCount, Value* args, boo
 	return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
 }
 
-void defineGlobalNatives(VM* vm) {
-	defineNative(vm, &vm->globals, "toString", 1, false, toStringNative);
-	defineNative(vm, &vm->globals, "repr", 1, false, reprNative);
-	defineNative(vm, &vm->globals, "clock", 0, false, clockNative);
-	defineNative(vm, &vm->globals, "sqrt", 1, false, sqrtNative);
-	defineNative(vm, &vm->globals, "print", 0, true, printNative);
-	defineNative(vm, &vm->globals, "input", 0, true, inputNative);
+void defineGlobalNatives(VM* vm, Module* mod) {
+	defineNative(vm, &mod->globals, "toString", 1, false, toStringNative);
+	defineNative(vm, &mod->globals, "repr", 1, false, reprNative);
+	defineNative(vm, &mod->globals, "clock", 0, false, clockNative);
+	defineNative(vm, &mod->globals, "sqrt", 1, false, sqrtNative);
+	defineNative(vm, &mod->globals, "print", 0, true, printNative);
+	defineNative(vm, &mod->globals, "input", 0, true, inputNative);
 }
 
 /*

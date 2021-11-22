@@ -68,7 +68,6 @@ void initVM(VM* vm) {
 	vm->grayStack = NULL;
 	vm->compiler = NULL;
 	initTable(&vm->strings);
-	initTable(&vm->globals);
 	initTable(&vm->listMethods);
 	initTable(&vm->stringMethods);
 	buildStringConstantTable(vm);
@@ -77,21 +76,15 @@ void initVM(VM* vm) {
 	push(vm, OBJ_VAL(objectClassName)); // GC
 	vm->objectClass = NULL;
 	vm->objectClass = newClass(vm, objectClassName);
-	tableSet(vm, &vm->globals, objectClassName, OBJ_VAL(vm->objectClass));
 	pop(vm);
 
 	ObjString* iteratorClassName = copyString(vm, "Iterator", 8);
 	push(vm, OBJ_VAL(iteratorClassName)); // GC
 	vm->iteratorClass = NULL;
 	vm->iteratorClass = newClass(vm, iteratorClassName);
-	tableSet(vm, &vm->globals, iteratorClassName, OBJ_VAL(vm->iteratorClass));
 	pop(vm);
 
-	tableSet(vm, &vm->globals, copyString(vm, "NaN", 3), NUMBER_VAL(nan("0")));
-	tableSet(vm, &vm->globals, copyString(vm, "Infinity", 8), NUMBER_VAL(INFINITY));
-	defineGlobalNatives(vm);
 	defineObjectNatives(vm);
-	defineExceptionClasses(vm);
 	defineListMethods(vm);
 	defineStringMethods(vm);
 	defineIteratorMethods(vm);
@@ -99,7 +92,6 @@ void initVM(VM* vm) {
 
 void freeVM(VM* vm) {
 	freeTable(vm, &vm->strings);
-	freeTable(vm, &vm->globals);
 	freeTable(vm, &vm->listMethods);
 	freeTable(vm, &vm->stringMethods);
 	FREE_ARRAY(vm, ObjString*, vm->stringConstants, STR_CONSTANT_COUNT);
@@ -223,7 +215,7 @@ ObjInstance* makeException(VM* vm, const char* name, const char* format, ...) {
 	ObjString* nameStr = copyString(vm, name, strlen(name));
 
 	Value value;
-	if (!tableGet(&vm->globals, nameStr, &value)) {
+	if (!tableGet(&vm->frames[vm->frameCount - 1].closure->owner->globals, nameStr, &value)) {
 		fprintf(stderr, "Expected '%s' to be available at global scope.", name);
 		return false;
 	}
@@ -251,7 +243,7 @@ bool throwException(VM* vm, const char* name, const char* format, ...) {
 	ObjString* nameStr = copyString(vm, name, strlen(name));
 
 	Value value;
-	if (!tableGet(&vm->globals, nameStr, &value)) {
+	if (!tableGet(&vm->frames[vm->frameCount - 1].closure->owner->globals, nameStr, &value)) {
 		fprintf(stderr, "Expected '%s' to be available at global scope.", name);
 		return false;
 	}
@@ -612,6 +604,7 @@ static bool instanceof(ObjInstance* instance, ObjClass* klass) {
 static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 	CallFrame* frame = &vm->frames[vm->frameCount - 1];
 	size_t baseFrameCount = vm->frameCount - 1;
+#define CURRENT_MODULE() (frame->closure->owner)
 #define READ_BYTE() (*frame->ip++)
 #define READ_SHORT() (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
 #define READ_CONSTANT() (getConstant(frame))
@@ -717,7 +710,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		case OP_GET_GLOBAL: {
 			ObjString* name = READ_STRING();
 			Value value;
-			if (!tableGet(&vm->globals, name, &value)) {
+			if (!tableGet(&CURRENT_MODULE()->globals, name, &value)) {
 				if (!throwException(vm, "UndefinedVariableException", "Undefined variable '%s'.", name->chars)) return INTERPRETER_RUNTIME_ERR;
 				break;
 			}
@@ -727,15 +720,15 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_DEFINE_GLOBAL: {
 			ObjString* name = READ_STRING();
-			tableSet(vm, &vm->globals, name, peek(vm, 0));
+			tableSet(vm, &CURRENT_MODULE()->globals, name, peek(vm, 0));
 			pop(vm);
 			break;
 		}
 
 		case OP_SET_GLOBAL: {
 			ObjString* name = READ_STRING();
-			if (tableSet(vm, &vm->globals, name, peek(vm, 0))) {
-				tableDelete(&vm->globals, name);
+			if (tableSet(vm, &CURRENT_MODULE()->globals, name, peek(vm, 0))) {
+				tableDelete(&CURRENT_MODULE()->globals, name);
 				if (!throwException(vm, "UndefinedVariableException", "Undefined variable '%s'.", name->chars)) return INTERPRETER_RUNTIME_ERR;
 				break;
 			}
@@ -1220,7 +1213,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 		case OP_CLOSURE: {
 			ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
-			ObjClosure* closure = newClosure(vm, function);
+			ObjClosure* closure = newClosure(vm, CURRENT_MODULE(), function);
 			push(vm, OBJ_VAL(closure));
 			for (size_t i = 0; i < closure->upvalueCount; i++) {
 				uint8_t isLocal = READ_BYTE();
@@ -1329,6 +1322,7 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 		}
 	}
 	return INTERPRETER_CONTINUE;
+#undef CURRENT_MODULE
 #undef READ_BYTE
 #undef READ_SHORT
 #undef READ_CONSTANT
@@ -1388,9 +1382,13 @@ InterpreterResult interpret(VM* vm, const char* source) {
 
 	vm->compiler = NULL;
 
+	//TODO CLEAN
+	Module mainModule;
+	initModule(vm, &mainModule);
+
 	uint8_t _;
 	push(vm, OBJ_VAL(function));
-	ObjClosure* closure = newClosure(vm, function);
+	ObjClosure* closure = newClosure(vm, &mainModule, function);
 	pop(vm);
 	push(vm, OBJ_VAL(closure));
 	call(vm, closure, 0, &_);

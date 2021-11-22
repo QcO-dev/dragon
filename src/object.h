@@ -4,6 +4,7 @@
 #include "value.h"
 #include "chunk.h"
 #include "table.h"
+#include "module.h"
 #include <stdarg.h>
 
 typedef enum {
@@ -54,6 +55,7 @@ struct ObjUpvalue {
 
 struct ObjClosure {
 	Obj obj;
+	Module* owner;
 	ObjFunction* function;
 	ObjUpvalue** upvalues;
 	size_t upvalueCount;
@@ -96,7 +98,7 @@ ObjInstance* newInstance(VM* vm, ObjClass* klass);
 ObjList* newList(VM* vm, ValueArray array);
 ObjFunction* newFunction(VM* vm);
 ObjNative* newNative(VM* vm, size_t arity, bool varargs, NativeFn function);
-ObjClosure* newClosure(VM* vm, ObjFunction* function);
+ObjClosure* newClosure(VM* vm, Module* owner, ObjFunction* function);
 ObjUpvalue* newUpvalue(VM* vm, Value* slot);
 ObjString* takeString(VM* vm, char* chars, size_t length);
 ObjString* copyString(VM* vm, const char* chars, size_t length);
