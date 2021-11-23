@@ -31,6 +31,7 @@ struct VM {
 	ObjClass* objectClass;
 	ObjClass* exceptionClass;
 	ObjClass* iteratorClass;
+	ObjClass* importClass;
 	Compiler* compiler;
 	ObjUpvalue* openUpvalues;
 	size_t bytesAllocated;

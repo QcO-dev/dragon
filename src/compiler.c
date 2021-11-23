@@ -1352,6 +1352,21 @@ static void breakStatement(Compiler* compiler) {
 	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after break.");
 }
 
+static void exportStatement(Compiler* compiler) {
+	expression(compiler);
+
+	consume(compiler, TOKEN_AS, "Expected 'as' after export value.");
+
+	consume(compiler, TOKEN_IDENTIFIER, "Expected export name to bind value to.");
+
+	uint32_t nameConstant = identifierConstant(compiler, &compiler->parser->previous);
+
+	emitByte(compiler, OP_EXPORT);
+	encodeConstant(compiler, nameConstant);
+
+	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after export.");
+}
+
 static void block(Compiler* compiler) {
 	while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
 		declaration(compiler);
@@ -1389,6 +1404,9 @@ static void statement(Compiler* compiler) {
 	}
 	else if (match(compiler, TOKEN_BREAK)) {
 		breakStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_EXPORT)) {
+		exportStatement(compiler);
 	}
 	else if (match(compiler, TOKEN_LEFT_BRACE)) {
 		beginScope(compiler);
@@ -1575,11 +1593,13 @@ ParseRule rules[] = {
   [TOKEN_STRING] = {string, NULL, PREC_NONE},
   [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
   [TOKEN_AND] = {NULL, and_, PREC_AND},
+  [TOKEN_AS] = {NULL, NULL, PREC_NONE},
   [TOKEN_BREAK] = {NULL, NULL, PREC_NONE},
   [TOKEN_CATCH] = {NULL, NULL, PREC_NONE},
   [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
   [TOKEN_CONTINUE] = {NULL, NULL, PREC_NONE},
   [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
+  [TOKEN_EXPORT] = {NULL, NULL, PREC_NONE},
   [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
   [TOKEN_FINALLY] = {NULL, NULL, PREC_NONE},
   [TOKEN_FOR] = {NULL, NULL, PREC_NONE},

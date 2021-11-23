@@ -155,6 +155,7 @@ int disassembleInstruction(VM* vm, Chunk* chunk, int offset) {
 		}
 		case OP_TRY_END: return simpleInstruction("TRY_END", offset);
 		case OP_IMPORT: return constantInstruction("IMPORT", vm, chunk, offset);
+		case OP_EXPORT: return constantInstruction("EXPORT", vm, chunk, offset);
 		case OP_RETURN: return simpleInstruction("RETURN", offset);
 		default: {
 			printf("Unknown Opcode %d\n", instruction);

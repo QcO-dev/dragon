@@ -4,6 +4,7 @@
 
 typedef struct Module {
 	Table globals;
+	Table exports;
 	struct Module* next;
 } Module;
 

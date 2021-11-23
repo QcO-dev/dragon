@@ -140,9 +140,10 @@ static TokenType checkKeyword(Scanner* scanner, size_t start, size_t length, con
 
 static TokenType identifierType(Scanner* scanner) {
 	switch (scanner->start[0]) {
+		case 'a': return checkKeyword(scanner, 1, 1, "s", TOKEN_AS);
 		case 'b': return checkKeyword(scanner, 1, 4, "reak", TOKEN_BREAK);
 		case 'c':
-			if (scanner->current - scanner->start - 1) {
+			if (scanner->current - scanner->start > 1) {
 				switch (scanner->start[1]) {
 					case 'a': return checkKeyword(scanner, 2, 3, "tch", TOKEN_CATCH);
 					case 'l': return checkKeyword(scanner, 2, 3, "ass", TOKEN_CLASS);
@@ -150,7 +151,15 @@ static TokenType identifierType(Scanner* scanner) {
 				}
 			}
 			break;
-		case 'e': return checkKeyword(scanner, 1, 3, "lse", TOKEN_ELSE);
+		case 'e': {
+			if (scanner->current - scanner->start > 1) {
+				switch (scanner->start[1]) {
+					case 'l': return checkKeyword(scanner, 2, 2, "se", TOKEN_ELSE);
+					case 'x': return checkKeyword(scanner, 2, 4, "port", TOKEN_EXPORT);
+				}
+			}
+			break;
+		}
 		case 'f':
 			if (scanner->current - scanner->start > 1) {
 				switch (scanner->start[1]) {

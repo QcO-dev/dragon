@@ -86,10 +86,23 @@ void initVM(VM* vm) {
 	vm->iteratorClass = newClass(vm, iteratorClassName);
 	pop(vm);
 
+	ObjString* importClassName = copyString(vm, "Import", 6);
+	push(vm, OBJ_VAL(importClassName)); // GC
+	vm->importClass = NULL;
+	vm->importClass = newClass(vm, importClassName);
+	pop(vm);
+
 	defineObjectNatives(vm);
 	defineListMethods(vm);
 	defineStringMethods(vm);
 	defineIteratorMethods(vm);
+
+	// Make all classes subclasses of Object
+	tableAddAll(vm, &vm->objectClass->methods, &vm->iteratorClass->methods);
+	vm->iteratorClass->superclass = vm->objectClass;
+
+	tableAddAll(vm, &vm->objectClass->methods, &vm->importClass->methods);
+	vm->importClass->superclass = vm->objectClass;
 }
 
 void freeVM(VM* vm) {
@@ -1351,10 +1364,25 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 
 			pop(vm);
 			
-			//TODO Replace with import object
-			push(vm, NULL_VAL);
+			ObjInstance* importObj = newInstance(vm, vm->importClass);
+
+			push(vm, OBJ_VAL(importObj));
+
+			tableAddAll(vm, &importModule->exports, &importObj->fields);
 
 			free(source);
+			break;
+		}
+
+		case OP_EXPORT: {
+			ObjString* name = READ_STRING();
+
+			Value value = peek(vm, 0);
+
+			tableSet(vm, &CURRENT_MODULE()->exports, name, value);
+
+			pop(vm);
+
 			break;
 		}
 

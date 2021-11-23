@@ -67,6 +67,7 @@ typedef enum {
 	OP_TRY_BEGIN,
 	OP_TRY_END,
 	OP_IMPORT,
+	OP_EXPORT,
 	OP_RETURN
 } Opcode;
 

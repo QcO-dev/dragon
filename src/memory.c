@@ -101,6 +101,8 @@ static void markRoots(VM* vm) {
 
 	markObject(vm, (Obj*)vm->objectClass);
 	markObject(vm, (Obj*)vm->exceptionClass);
+	markObject(vm, (Obj*)vm->iteratorClass);
+	markObject(vm, (Obj*)vm->importClass);
 	if(vm->compiler != NULL) markCompilerRoots(vm->compiler);
 }
 

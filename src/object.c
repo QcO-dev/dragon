@@ -323,7 +323,7 @@ ObjString* objectToRepr(VM* vm, Value value) {
 			// The above types cannot fail.
 			return objectToString(vm, value, NULL, NULL);
 		case OBJ_LIST:
-			return listToString(vm, AS_LIST(value), NULL, true, NULL);
+			return listToString(vm, AS_LIST(value), NULL, NULL, true);
 		case OBJ_INSTANCE:
 			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
 		case OBJ_STRING:

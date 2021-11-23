@@ -87,7 +87,7 @@ void defineGlobalNatives(VM* vm, Module* mod) {
 /*
 	Utility functions 
 	- callDragonFromNative allows for a value to be called from a native function and its value returned.
-	- defineNative creates the needed objects and adds them to the global variable table in the VM, for a given native method.
+	- defineNative creates the needed objects and adds them to the module variable table in the VM, for a given native method.
 */
 
 Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, bool* hasError, ObjInstance** exception) {
