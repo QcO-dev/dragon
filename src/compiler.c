@@ -1507,15 +1507,31 @@ static void classDeclaration(Compiler* compiler) {
 }
 
 static void importDeclaration(Compiler* compiler) {
-	consume(compiler, TOKEN_IDENTIFIER, "Expected import name.");
+	char buffer[1024];
+	size_t length = 0;
 
-	Token path = compiler->parser->previous;
+	do {
+		consume(compiler, TOKEN_IDENTIFIER, "Expected import name.");
+		Token part = compiler->parser->previous;
+
+		if (length + part.length + 1 > 1024) {
+			error(compiler->parser, "Import path exceeded maximum length (1024 characters).");
+			break;
+		}
+
+		memcpy(&buffer[length], part.start, part.length);
+		length += part.length;
+		buffer[length] = '/';
+		length += 1;
+	} while (match(compiler, TOKEN_DOT));
+
+	ObjString* path = copyString(compiler->vm, buffer, length - 1);
 
 	uint32_t nameConstant = identifierConstant(compiler, &compiler->parser->previous);
 	declareVariable(compiler);
 
 	emitByte(compiler, OP_IMPORT);
-	encodeConstant(compiler, makeConstant(compiler, OBJ_VAL(copyString(compiler->vm, path.start, path.length))));
+	encodeConstant(compiler, makeConstant(compiler, OBJ_VAL(path)));
 
 	defineVariable(compiler, nameConstant);
 
