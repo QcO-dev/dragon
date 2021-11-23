@@ -169,6 +169,7 @@ static TokenType identifierType(Scanner* scanner) {
 			if (scanner->current - scanner->start > 1) {
 				switch (scanner->start[1]) {
 					case 'f': return checkKeyword(scanner, 2, 0, "", TOKEN_IF);
+					case 'm': return checkKeyword(scanner, 2, 4, "port", TOKEN_IMPORT);
 					case 's': return checkKeyword(scanner, 2, 0, "", TOKEN_IS);
 					case 'n':
 						if (scanner->current - scanner->start > 2) {

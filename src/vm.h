@@ -17,6 +17,7 @@ typedef struct {
 
 struct VM {
 	Module* modules;
+	char* directory;
 	CallFrame* frames;
 	size_t frameCount;
 	size_t frameSize;
@@ -71,7 +72,7 @@ typedef enum {
 
 void initVM(VM* vm);
 void freeVM(VM* vm);
-InterpreterResult interpret(VM* vm, const char* source);
+InterpreterResult interpret(VM* vm, const char* directory, const char* source);
 ObjInstance* makeException(VM* vm, const char* name, const char* format, ...);
 bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed);
 bool validateListIndex(VM* vm, size_t listLength, Value indexVal, uintmax_t* dest);
@@ -79,3 +80,4 @@ Value runFunction(VM* vm, bool* hasError);
 void push(VM* vm, Value value);
 Value pop(VM* vm);
 Value popN(VM* vm, size_t count);
+Value peek(VM* vm, size_t distance);

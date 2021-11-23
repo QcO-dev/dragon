@@ -10,7 +10,9 @@
 #include "list.h"
 #include "strings.h"
 #include "iterator.h"
+#include "file.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 #include <math.h>
@@ -129,7 +131,7 @@ Value popN(VM* vm, size_t count) {
 	return *vm->stackTop;
 }
 
-static Value peek(VM* vm, size_t distance) {
+Value peek(VM* vm, size_t distance) {
 	return vm->stackTop[-1 - distance];
 }
 
@@ -1310,6 +1312,52 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			break;
 		}
 
+		case OP_IMPORT: {
+			ObjString* path = READ_STRING();
+			
+			ObjString* lookupPath = makeStringf(vm, "%s/%s.dgn", vm->directory, path->chars);
+
+			//TODO Refactor to use custom file type and FREE_ARRAY
+			char* source = readFile(lookupPath->chars);
+
+			ObjFunction* function = compile(vm, source);
+			if (function == NULL) return INTERPRETER_COMPILER_ERR;
+
+			vm->compiler = NULL;
+
+			Module* importModule = reallocate(vm, NULL, 0, sizeof(Module));
+			initModule(vm, importModule);
+
+			Module* vmModule = vm->modules;
+
+			while (vmModule != NULL) {
+				Module* next = vmModule->next;
+				if (vmModule->next == NULL) {
+					vmModule->next = importModule;
+				}
+				vmModule = next;
+			}
+
+			uint8_t _;
+			push(vm, OBJ_VAL(function));
+			ObjClosure* closure = newClosure(vm, importModule, function);
+			pop(vm);
+			push(vm, OBJ_VAL(closure));
+			
+			bool hasError = false;
+			ObjInstance* exception = NULL;
+
+			callDragonFromNative(vm, NULL, OBJ_VAL(closure), 0, &hasError, &exception);
+
+			pop(vm);
+			
+			//TODO Replace with import object
+			push(vm, NULL_VAL);
+
+			free(source);
+			break;
+		}
+
 		case OP_RETURN: {
 			Value value = pop(vm);
 			closeUpvalues(vm, frame->slots);
@@ -1384,7 +1432,8 @@ static InterpreterResult run(VM* vm) {
 	}
 }
 
-InterpreterResult interpret(VM* vm, const char* source) {
+InterpreterResult interpret(VM* vm, const char* directory, const char* source) {
+	vm->directory = directory;
 	ObjFunction* function = compile(vm, source);
 	if (function == NULL) return INTERPRETER_COMPILER_ERR;
 

@@ -1488,6 +1488,22 @@ static void classDeclaration(Compiler* compiler) {
 	compiler->currentClass = compiler->currentClass->enclosing;
 }
 
+static void importDeclaration(Compiler* compiler) {
+	consume(compiler, TOKEN_IDENTIFIER, "Expected import name.");
+
+	Token path = compiler->parser->previous;
+
+	uint32_t nameConstant = identifierConstant(compiler, &compiler->parser->previous);
+	declareVariable(compiler);
+
+	emitByte(compiler, OP_IMPORT);
+	encodeConstant(compiler, makeConstant(compiler, OBJ_VAL(copyString(compiler->vm, path.start, path.length))));
+
+	defineVariable(compiler, nameConstant);
+
+	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after import.");
+}
+
 static void declaration(Compiler* compiler) {
 	if (match(compiler, TOKEN_CLASS)) {
 		classDeclaration(compiler);
@@ -1497,6 +1513,9 @@ static void declaration(Compiler* compiler) {
 	}
 	else if (match(compiler, TOKEN_FUNCTION)) {
 		functionDeclaration(compiler);
+	}
+	else if (match(compiler, TOKEN_IMPORT)) {
+		importDeclaration(compiler);
 	}
 	else {
 		statement(compiler);
@@ -1567,6 +1586,7 @@ ParseRule rules[] = {
   [TOKEN_FOREACH] = {NULL, NULL, PREC_NONE},
   [TOKEN_FUNCTION] = {NULL, NULL, PREC_NONE},
   [TOKEN_IF] = {NULL, NULL, PREC_NONE},
+  [TOKEN_IMPORT] = {NULL, NULL, PREC_NONE},
   [TOKEN_IS] = {NULL, binary, PREC_EQUALITY},
   [TOKEN_IN] = {NULL, binary, PREC_COMPARISON},
   [TOKEN_INSTANCEOF] = {NULL, binary, PREC_COMPARISON},

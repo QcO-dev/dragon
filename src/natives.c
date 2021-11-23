@@ -127,7 +127,7 @@ Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, 
 void defineNative(VM* vm, Table* table, const char* name, size_t arity, bool varargs, NativeFn function) {
 	push(vm, OBJ_VAL(copyString(vm, name, strlen(name))));
 	push(vm, OBJ_VAL(newNative(vm, arity, varargs, function)));
-	tableSet(vm, table, AS_STRING(vm->stack[0]), vm->stack[1]);
+	tableSet(vm, table, AS_STRING(peek(vm, 1)), peek(vm, 0));
 	pop(vm);
 	pop(vm);
 }
