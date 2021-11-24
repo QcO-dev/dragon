@@ -69,6 +69,7 @@ typedef enum {
 	STR_NATIVE_FUNCTION,
 	STR_INDEX,
 	STR_DATA,
+	STR_THIS_MODULE,
 	STR_CONSTANT_COUNT
 } StringConstant;
 

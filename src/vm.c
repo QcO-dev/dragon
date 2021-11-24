@@ -55,6 +55,7 @@ static void buildStringConstantTable(VM* vm) {
 	table[STR_NATIVE_FUNCTION] = copyString(vm, "<native function>", 17);
 	table[STR_INDEX] = copyString(vm, "index", 5);
 	table[STR_DATA] = copyString(vm, "data", 4);
+	table[STR_THIS_MODULE] = copyString(vm, "THIS_MODULE", 11);
 
 	vm->stringConstants = table;
 }
@@ -1358,6 +1359,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 				vmModule = next;
 			}
 
+			tableSet(vm, &importModule->globals, vm->stringConstants[STR_THIS_MODULE], OBJ_VAL(path));
+
 			uint8_t _;
 			push(vm, OBJ_VAL(function));
 			ObjClosure* closure = newClosure(vm, importModule, function);
@@ -1480,6 +1483,8 @@ InterpreterResult interpret(VM* vm, const char* directory, const char* source) {
 	initModule(vm, mainModule);
 
 	vm->modules = mainModule;
+
+	tableSet(vm, &mainModule->globals, vm->stringConstants[STR_THIS_MODULE], OBJ_VAL(copyString(vm, "$main$", 6)));
 
 	uint8_t _;
 	push(vm, OBJ_VAL(function));
