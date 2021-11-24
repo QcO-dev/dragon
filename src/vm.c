@@ -70,6 +70,7 @@ void initVM(VM* vm) {
 	vm->grayStack = NULL;
 	vm->compiler = NULL;
 	initTable(&vm->strings);
+	initTable(&vm->importTable);
 	initTable(&vm->listMethods);
 	initTable(&vm->stringMethods);
 	buildStringConstantTable(vm);
@@ -1330,6 +1331,12 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			
 			ObjString* lookupPath = makeStringf(vm, "%s/%s.dgn", vm->directory, path->chars);
 
+			Value importValue;
+			if (tableGet(&vm->importTable, path, &importValue)) {
+				push(vm, importValue);
+				break;
+			}
+
 			//TODO Refactor to use custom file type and FREE_ARRAY
 			char* source = readFile(lookupPath->chars);
 
@@ -1371,6 +1378,8 @@ static InterpreterResult fetchExecute(VM* vm, bool isFunctionCall) {
 			tableAddAll(vm, &importModule->exports, &importObj->fields);
 
 			free(source);
+
+			tableSet(vm, &vm->importTable, path, OBJ_VAL(importObj));
 			break;
 		}
 

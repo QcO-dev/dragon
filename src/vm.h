@@ -25,6 +25,7 @@ struct VM {
 	size_t stackSize;
 	Value* stackTop;
 	Table strings;
+	Table importTable;
 	Table listMethods;
 	Table stringMethods;
 	ObjString** stringConstants;

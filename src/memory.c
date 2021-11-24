@@ -94,6 +94,7 @@ static void markRoots(VM* vm) {
 
 	markTable(vm, &vm->listMethods);
 	markTable(vm, &vm->stringMethods);
+	markTable(vm, &vm->importTable);
 	
 	for (size_t i = 0; i < STR_CONSTANT_COUNT; i++) {
 		markObject(vm, (Obj*)vm->stringConstants[i]);
