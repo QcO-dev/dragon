@@ -3,6 +3,7 @@
 #include "value.h"
 #include "table.h"
 #include "compiler.h"
+#include "module.h"
 
 #define FRAMES_MAX 1024
 
@@ -15,20 +16,23 @@ typedef struct {
 } CallFrame;
 
 struct VM {
+	Module* modules;
+	char* directory;
 	CallFrame* frames;
 	size_t frameCount;
 	size_t frameSize;
 	Value* stack;
 	size_t stackSize;
 	Value* stackTop;
-	Table globals;
 	Table strings;
+	Table importTable;
 	Table listMethods;
 	Table stringMethods;
 	ObjString** stringConstants;
 	ObjClass* objectClass;
 	ObjClass* exceptionClass;
 	ObjClass* iteratorClass;
+	ObjClass* importClass;
 	Compiler* compiler;
 	ObjUpvalue* openUpvalues;
 	size_t bytesAllocated;
@@ -65,12 +69,13 @@ typedef enum {
 	STR_NATIVE_FUNCTION,
 	STR_INDEX,
 	STR_DATA,
+	STR_THIS_MODULE,
 	STR_CONSTANT_COUNT
 } StringConstant;
 
 void initVM(VM* vm);
 void freeVM(VM* vm);
-InterpreterResult interpret(VM* vm, const char* source);
+InterpreterResult interpret(VM* vm, const char* directory, const char* source);
 ObjInstance* makeException(VM* vm, const char* name, const char* format, ...);
 bool callValue(VM* vm, Value callee, uint8_t argCount, uint8_t* argsUsed);
 bool validateListIndex(VM* vm, size_t listLength, Value indexVal, uintmax_t* dest);
@@ -78,3 +83,4 @@ Value runFunction(VM* vm, bool* hasError);
 void push(VM* vm, Value value);
 Value pop(VM* vm);
 Value popN(VM* vm, size_t count);
+Value peek(VM* vm, size_t distance);

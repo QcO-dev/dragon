@@ -85,9 +85,16 @@ static void markRoots(VM* vm) {
 		markObject(vm, (Obj*)upvalue);
 	}
 
-	markTable(vm, &vm->globals);
+	Module* mod = vm->modules;
+
+	while (mod != NULL) {
+		markTable(vm, &mod->globals);
+		mod = mod->next;
+	}
+
 	markTable(vm, &vm->listMethods);
 	markTable(vm, &vm->stringMethods);
+	markTable(vm, &vm->importTable);
 	
 	for (size_t i = 0; i < STR_CONSTANT_COUNT; i++) {
 		markObject(vm, (Obj*)vm->stringConstants[i]);
@@ -95,6 +102,8 @@ static void markRoots(VM* vm) {
 
 	markObject(vm, (Obj*)vm->objectClass);
 	markObject(vm, (Obj*)vm->exceptionClass);
+	markObject(vm, (Obj*)vm->iteratorClass);
+	markObject(vm, (Obj*)vm->importClass);
 	if(vm->compiler != NULL) markCompilerRoots(vm->compiler);
 }
 

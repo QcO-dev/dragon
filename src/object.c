@@ -75,7 +75,7 @@ ObjNative* newNative(VM* vm, size_t arity, bool varargs, NativeFn function) {
 	return native;
 }
 
-ObjClosure* newClosure(VM* vm, ObjFunction* function) {
+ObjClosure* newClosure(VM* vm, Module* owner, ObjFunction* function) {
 	ObjUpvalue** upvalues = ALLOCATE(vm, ObjUpvalue*, function->upvalueCount);
 	for (size_t i = 0; i < function->upvalueCount; i++) {
 		upvalues[i] = NULL;
@@ -85,6 +85,7 @@ ObjClosure* newClosure(VM* vm, ObjFunction* function) {
 	closure->function = function;
 	closure->upvalues = upvalues;
 	closure->upvalueCount = function->upvalueCount;
+	closure->owner = owner;
 	return closure;
 }
 
@@ -322,7 +323,7 @@ ObjString* objectToRepr(VM* vm, Value value) {
 			// The above types cannot fail.
 			return objectToString(vm, value, NULL, NULL);
 		case OBJ_LIST:
-			return listToString(vm, AS_LIST(value), NULL, true, NULL);
+			return listToString(vm, AS_LIST(value), NULL, NULL, true);
 		case OBJ_INSTANCE:
 			return makeStringf(vm, "<instance %s>", AS_INSTANCE(value)->klass->name->chars);
 		case OBJ_STRING:

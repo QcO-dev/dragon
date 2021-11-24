@@ -1352,6 +1352,21 @@ static void breakStatement(Compiler* compiler) {
 	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after break.");
 }
 
+static void exportStatement(Compiler* compiler) {
+	expression(compiler);
+
+	consume(compiler, TOKEN_AS, "Expected 'as' after export value.");
+
+	consume(compiler, TOKEN_IDENTIFIER, "Expected export name to bind value to.");
+
+	uint32_t nameConstant = identifierConstant(compiler, &compiler->parser->previous);
+
+	emitByte(compiler, OP_EXPORT);
+	encodeConstant(compiler, nameConstant);
+
+	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after export.");
+}
+
 static void block(Compiler* compiler) {
 	while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
 		declaration(compiler);
@@ -1389,6 +1404,9 @@ static void statement(Compiler* compiler) {
 	}
 	else if (match(compiler, TOKEN_BREAK)) {
 		breakStatement(compiler);
+	}
+	else if (match(compiler, TOKEN_EXPORT)) {
+		exportStatement(compiler);
 	}
 	else if (match(compiler, TOKEN_LEFT_BRACE)) {
 		beginScope(compiler);
@@ -1488,6 +1506,38 @@ static void classDeclaration(Compiler* compiler) {
 	compiler->currentClass = compiler->currentClass->enclosing;
 }
 
+static void importDeclaration(Compiler* compiler) {
+	char buffer[1024];
+	size_t length = 0;
+
+	do {
+		consume(compiler, TOKEN_IDENTIFIER, "Expected import name.");
+		Token part = compiler->parser->previous;
+
+		if (length + part.length + 1 > 1024) {
+			error(compiler->parser, "Import path exceeded maximum length (1024 characters).");
+			break;
+		}
+
+		memcpy(&buffer[length], part.start, part.length);
+		length += part.length;
+		buffer[length] = '/';
+		length += 1;
+	} while (match(compiler, TOKEN_DOT));
+
+	ObjString* path = copyString(compiler->vm, buffer, length - 1);
+
+	uint32_t nameConstant = identifierConstant(compiler, &compiler->parser->previous);
+	declareVariable(compiler);
+
+	emitByte(compiler, OP_IMPORT);
+	encodeConstant(compiler, makeConstant(compiler, OBJ_VAL(path)));
+
+	defineVariable(compiler, nameConstant);
+
+	consume(compiler, TOKEN_SEMICOLON, "Expected ';' after import.");
+}
+
 static void declaration(Compiler* compiler) {
 	if (match(compiler, TOKEN_CLASS)) {
 		classDeclaration(compiler);
@@ -1497,6 +1547,9 @@ static void declaration(Compiler* compiler) {
 	}
 	else if (match(compiler, TOKEN_FUNCTION)) {
 		functionDeclaration(compiler);
+	}
+	else if (match(compiler, TOKEN_IMPORT)) {
+		importDeclaration(compiler);
 	}
 	else {
 		statement(compiler);
@@ -1556,17 +1609,20 @@ ParseRule rules[] = {
   [TOKEN_STRING] = {string, NULL, PREC_NONE},
   [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
   [TOKEN_AND] = {NULL, and_, PREC_AND},
+  [TOKEN_AS] = {NULL, NULL, PREC_NONE},
   [TOKEN_BREAK] = {NULL, NULL, PREC_NONE},
   [TOKEN_CATCH] = {NULL, NULL, PREC_NONE},
   [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
   [TOKEN_CONTINUE] = {NULL, NULL, PREC_NONE},
   [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
+  [TOKEN_EXPORT] = {NULL, NULL, PREC_NONE},
   [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
   [TOKEN_FINALLY] = {NULL, NULL, PREC_NONE},
   [TOKEN_FOR] = {NULL, NULL, PREC_NONE},
   [TOKEN_FOREACH] = {NULL, NULL, PREC_NONE},
   [TOKEN_FUNCTION] = {NULL, NULL, PREC_NONE},
   [TOKEN_IF] = {NULL, NULL, PREC_NONE},
+  [TOKEN_IMPORT] = {NULL, NULL, PREC_NONE},
   [TOKEN_IS] = {NULL, binary, PREC_EQUALITY},
   [TOKEN_IN] = {NULL, binary, PREC_COMPARISON},
   [TOKEN_INSTANCEOF] = {NULL, binary, PREC_COMPARISON},

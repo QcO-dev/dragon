@@ -75,19 +75,19 @@ static Value sqrtNative(VM* vm, Value* bound, uint8_t argCount, Value* args, boo
 	return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
 }
 
-void defineGlobalNatives(VM* vm) {
-	defineNative(vm, &vm->globals, "toString", 1, false, toStringNative);
-	defineNative(vm, &vm->globals, "repr", 1, false, reprNative);
-	defineNative(vm, &vm->globals, "clock", 0, false, clockNative);
-	defineNative(vm, &vm->globals, "sqrt", 1, false, sqrtNative);
-	defineNative(vm, &vm->globals, "print", 0, true, printNative);
-	defineNative(vm, &vm->globals, "input", 0, true, inputNative);
+void defineGlobalNatives(VM* vm, Module* mod) {
+	defineNative(vm, &mod->globals, "toString", 1, false, toStringNative);
+	defineNative(vm, &mod->globals, "repr", 1, false, reprNative);
+	defineNative(vm, &mod->globals, "clock", 0, false, clockNative);
+	defineNative(vm, &mod->globals, "sqrt", 1, false, sqrtNative);
+	defineNative(vm, &mod->globals, "print", 0, true, printNative);
+	defineNative(vm, &mod->globals, "input", 0, true, inputNative);
 }
 
 /*
 	Utility functions 
 	- callDragonFromNative allows for a value to be called from a native function and its value returned.
-	- defineNative creates the needed objects and adds them to the global variable table in the VM, for a given native method.
+	- defineNative creates the needed objects and adds them to the module variable table in the VM, for a given native method.
 */
 
 Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, bool* hasError, ObjInstance** exception) {
@@ -127,7 +127,7 @@ Value callDragonFromNative(VM* vm, Value* bound, Value callee, size_t argCount, 
 void defineNative(VM* vm, Table* table, const char* name, size_t arity, bool varargs, NativeFn function) {
 	push(vm, OBJ_VAL(copyString(vm, name, strlen(name))));
 	push(vm, OBJ_VAL(newNative(vm, arity, varargs, function)));
-	tableSet(vm, table, AS_STRING(vm->stack[0]), vm->stack[1]);
+	tableSet(vm, table, AS_STRING(peek(vm, 1)), peek(vm, 0));
 	pop(vm);
 	pop(vm);
 }
